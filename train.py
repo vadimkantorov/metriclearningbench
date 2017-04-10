@@ -16,14 +16,14 @@ opts = dict(
 	DATA_DIR = 'data',
 	NUM_EPOCHS = 1,
 	BATCH_SIZE = 64,
-	RETRIEVAL_K = 1,
 	TRAIN_CLASSES = 100,
-	NUM_THREADS = 16
+	NUM_THREADS = 16,
+	SEED = 1
 )
 
-def pairwise_euclidean_distance(A, eps = 1e-6):
+def pairwise_euclidean_distance(A):
 	norm = A.mul(A).sum(1).expand(A.size(0), A.size(0))
-	return torch.sqrt(2 * norm - 2 * torch.mm(A, A.t()) + eps)
+	return torch.sqrt(2 * (norm - torch.mm(A, A.t())).clamp(min = 0))
 
 class LiftedStruct(nn.Module):
 	def __init__(self, base_model, embedding_size = 128):
@@ -36,7 +36,7 @@ class LiftedStruct(nn.Module):
 
 	def criterion(self, input, labels, margin = 1.0, eps = 1e-6):
 		pos = torch.eq(*[labels.unsqueeze(d).expand(len(labels), len(labels)) for d in [0, 1]]).type_as(input)
-		d = pairwise_euclidean_distance(input, eps = eps)
+		d = pairwise_euclidean_distance(input)
 
 		margin_d = margin - d
 		neg_i = torch.mul(torch.exp(margin_d), 1 - pos).sum(0)
@@ -78,6 +78,9 @@ def adapt_sampler(batch_size, dataset, sampler, **kwargs):
 		__iter__ = lambda _: itertools.chain.from_iterable(sampler(batch_size, dataset, **kwargs))
 	))()
 
+for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
+	set_random_seed(opts['SEED'])
+
 base_model = googlenet.GoogLeNet()
 base_model_weights = hickle.load(opts['BASE_MODEL_WEIGHTS'])
 base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
@@ -99,15 +102,15 @@ model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
 
 for epoch in range(opts['NUM_EPOCHS']):
-	model.train()
-	for batch_idx, batch in enumerate(loader_train):
-		images, labels = [Variable(tensor.cuda()) for tensor in batch]
-		loss = model.criterion(model(images), labels)
-		
-		optimizer.zero_grad()
-		loss.backward()
-		optimizer.step()
-		print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
+	#model.train()
+	#for batch_idx, batch in enumerate(loader_train):
+	#	images, labels = [Variable(tensor.cuda()) for tensor in batch]
+	#	loss = model.criterion(model(images), labels)
+	#	
+	#	optimizer.zero_grad()
+	#	loss.backward()
+	#	optimizer.step()
+	#	print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
 	
 	model.eval()
 	embeddings_all, labels_all = [], []
@@ -117,4 +120,4 @@ for epoch in range(opts['NUM_EPOCHS']):
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
 		print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-	print(dataset.recall(torch.cat(embeddings, 0), torch.cat(labels, 0), opts['RETRIEVAL_K']))
+	print('recall@1 epoch {}'.format(epoch), dataset.recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0)))

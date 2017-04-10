@@ -26,8 +26,8 @@ class Cub2011(ImageFolder, CIFAR10):
 							   ' You can use download=True to download it')
 		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
 
-	def recall(self, embeddings, labels, K):
+	def recall(self, embeddings, labels, K = 1):
 		norm = embeddings.mul(embeddings).sum(1).expand(embeddings.size(0), embeddings.size(0))
-		D = 2 * norm - 2 * torch.mm(embeddings, embeddings.t()) + eps
-		knn_inds = D.topk(1 + K, largest = False)[1][:, 1 : 1 + K]
+		D = 2 * (norm - torch.mm(embeddings, embeddings.t()))
+		knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1 : 1 + K]
 		return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
