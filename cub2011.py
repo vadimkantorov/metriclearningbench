@@ -1,4 +1,5 @@
 import os
+import torch
 import torch.utils.data as data
 import torchvision
 from torchvision.datasets import ImageFolder
@@ -24,3 +25,9 @@ class Cub2011(ImageFolder, CIFAR10):
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
 		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
+
+	def recall(self, embeddings, labels, K):
+		norm = embeddings.mul(embeddings).sum(1).expand(embeddings.size(0), embeddings.size(0))
+		D = 2 * norm - 2 * torch.mm(embeddings, embeddings.t()) + eps
+		knn_inds = D.topk(1 + K, largest = False)[1][:, 1 : 1 + K]
+		return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
