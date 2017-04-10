@@ -1,3 +1,4 @@
+import os
 import random
 import itertools
 import hickle
@@ -11,6 +12,8 @@ from torch.autograd import Variable
 import googlenet
 import cub2011
 
+assert os.environ.get('CUDA_VISIBLE_DEVICES')
+
 opts = dict(
 	DATA_DIR = 'data',
 	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
@@ -22,9 +25,9 @@ opts = dict(
 	SEED = 1
 )
 
-def pairwise_euclidean_distance(A):
+def pairwise_euclidean_distance(A, eps = 1e-6):
 	norm = A.mul(A).sum(1).expand(A.size(0), A.size(0))
-	return torch.sqrt(2 * (norm - torch.mm(A, A.t())).clamp(min = 0))
+	return torch.sqrt(norm + norm.t() - torch.mm(A, A.t()) + eps)
 
 class LiftedStruct(nn.Module):
 	def __init__(self, base_model, embedding_size = 128):
@@ -37,10 +40,10 @@ class LiftedStruct(nn.Module):
 
 	def criterion(self, input, labels, margin = 1.0, eps = 1e-6):
 		pos = torch.eq(*[labels.unsqueeze(d).expand(len(labels), len(labels)) for d in [0, 1]]).type_as(input)
-		d = pairwise_euclidean_distance(input)
+		d = pairwise_euclidean_distance(input, eps = eps)
 
 		margin_d = margin - d
-		neg_i = torch.mul(torch.exp(margin_d), 1 - pos).sum(0)
+		neg_i = torch.mul(margin_d.exp(), 1 - pos).sum(0)
 		v = torch.log(neg_i.view(1, -1).expand_as(margin_d) + neg_i.view(-1, 1).expand_as(margin_d) + eps)
 		return torch.sum(torch.mul(pos, d + v).clamp(min = 0).pow(2)) / (2 * pos.sum())
 
@@ -56,7 +59,7 @@ class LiftedStruct(nn.Module):
 			yield example_indices
 	
 	optim_algo = optim.SGD
-	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
+	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 2e-4, dampening = 0)
 
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
 	return type('', (), dict(

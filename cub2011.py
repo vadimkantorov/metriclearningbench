@@ -28,6 +28,6 @@ class Cub2011(ImageFolder, CIFAR10):
 
 	def recall(self, embeddings, labels, K = 1):
 		norm = embeddings.mul(embeddings).sum(1).expand(embeddings.size(0), embeddings.size(0))
-		D = 2 * (norm - torch.mm(embeddings, embeddings.t()))
+		D = norm + norm.t() - torch.mm(embeddings, embeddings.t())
 		knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1 : 1 + K]
 		return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
