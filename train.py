@@ -57,21 +57,6 @@ class LiftedStruct(nn.Module):
 	optim_algo = optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
 
-class PDDM(nn.Module):
-	def __init__(self, base_model):
-		super(PDDM, self).__init__()
-		self.base_model = base_model
-
-def SequentialSampler(batch_size, dataset):
-	batch_idx = 0
-	while True:
-		yield range(batch_idx * batch_size, min((batch_idx + 1) * batch_size, len(dataset)))
-		batch_idx += 1
-
-def ShuffleSampler(batch_size, dataset):
-	while True:
-		yield random.sample(xrange(len(dataset)), batch_size)
-		
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
 	return type('', (), dict(
 		__len__ = dataset.__len__,
@@ -102,15 +87,15 @@ model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
 
 for epoch in range(opts['NUM_EPOCHS']):
-	#model.train()
-	#for batch_idx, batch in enumerate(loader_train):
-	#	images, labels = [Variable(tensor.cuda()) for tensor in batch]
-	#	loss = model.criterion(model(images), labels)
-	#	
-	#	optimizer.zero_grad()
-	#	loss.backward()
-	#	optimizer.step()
-	#	print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
+	model.train()
+	for batch_idx, batch in enumerate(loader_train):
+		images, labels = [Variable(tensor.cuda()) for tensor in batch]
+		loss = model.criterion(model(images), labels)
+		
+		optimizer.zero_grad()
+		loss.backward()
+		optimizer.step()
+		print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
 	
 	model.eval()
 	embeddings_all, labels_all = [], []
