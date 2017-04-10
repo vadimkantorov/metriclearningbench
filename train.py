@@ -12,10 +12,11 @@ import googlenet
 import cub2011
 
 opts = dict(
-	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
 	DATA_DIR = 'data',
-	NUM_EPOCHS = 1,
-	BATCH_SIZE = 64,
+	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
+	LOG = 'data/log.txt',
+	NUM_EPOCHS = 400,
+	BATCH_SIZE = 128,
 	TRAIN_CLASSES = 100,
 	NUM_THREADS = 16,
 	SEED = 1
@@ -86,16 +87,20 @@ loader_eval = torch.utils.data.DataLoader(dataset, sampler = [example_idx for ex
 model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
 
+log = open(opts['LOG'], 'w', 0)
 for epoch in range(opts['NUM_EPOCHS']):
 	model.train()
+	loss_all = []
 	for batch_idx, batch in enumerate(loader_train):
 		images, labels = [Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
+		loss_all.append(loss.data[0])
 		
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
 		print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
+	log.write('loss epoch {}: {}\n'.format(epoch, torch.Tensor(loss_all).mean()))
 	
 	model.eval()
 	embeddings_all, labels_all = [], []
@@ -105,4 +110,4 @@ for epoch in range(opts['NUM_EPOCHS']):
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
 		print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-	print('recall@1 epoch {}'.format(epoch), dataset.recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0)))
+	log.write('recall@1 epoch {}: {}\n'.format(epoch, dataset.recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0))))
