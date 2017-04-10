@@ -4,18 +4,21 @@ import torch.nn as nn
 class GoogLeNet(nn.Sequential):
 	def __init__(self):
 		super(GoogLeNet, self).__init__(OrderedDict([
-			('conv1_7x7_s2', nn.Conv2d(3, 64, (7, 7), (2, 2), (3, 3))),
-			('relu1', nn.ReLU(True)),
-			('pool1', nn.MaxPool2d((3, 3), (2, 2), ceil_mode = True)),
-			('lrn1', nn.CrossMapLRN2d(5, 0.0001, 0.75, 1)),
+			('conv1', nn.Sequential(OrderedDict([
+				('7x7_s2', nn.Conv2d(3, 64, (7, 7), (2, 2), (3, 3))),
+				('relu1', nn.ReLU(True)),
+				('pool1', nn.MaxPool2d((3, 3), (2, 2), ceil_mode = True)),
+				('lrn1', nn.CrossMapLRN2d(5, 0.0001, 0.75, 1))
+			]))),
 
-			('conv_3x3_reduce', nn.Conv2d(64, 64, (1, 1), (1, 1), (0, 0))),
-			('relu_3x3', nn.ReLU(True)),
-
-			('conv2_3x3', nn.Conv2d(64, 192, (3, 3), (1, 1), (1, 1))),
-			('relu2', nn.ReLU(True)),
-			('lrn2', nn.CrossMapLRN2d(5, 0.0001, 0.75, 1)),
-			('pool2', nn.MaxPool2d((3, 3), (2, 2), ceil_mode = True)),
+			('conv2', nn.Sequential(OrderedDict([
+				('3x3_reduce', nn.Conv2d(64, 64, (1, 1), (1, 1), (0, 0))),
+				('relu1', nn.ReLU(True)),
+				('3x3', nn.Conv2d(64, 192, (3, 3), (1, 1), (1, 1))),
+				('relu2', nn.ReLU(True)),
+				('lrn2', nn.CrossMapLRN2d(5, 0.0001, 0.75, 1)),
+				('pool2', nn.MaxPool2d((3, 3), (2, 2), ceil_mode = True))
+			]))),
 
 			('inception_3a', InceptionModule(192, 64, 96, 128, 16, 32, 32)),
 			('inception_3b', InceptionModule(256, 128, 128, 192, 32, 96, 64)),
@@ -41,33 +44,35 @@ class GoogLeNet(nn.Sequential):
 class InceptionModule(nn.Module):
 	def __init__(self, inplane, outplane_a1x1, outplane_b3x3_reduce, outplane_b3x3, outplane_c5x5_reduce, outplane_c5x5, outplane_pool_proj):
 		super(InceptionModule, self).__init__()
-		self.a = nn.Sequential(OrderedDict([
+		a = nn.Sequential(OrderedDict([
 			('1x1', nn.Conv2d(inplane, outplane_a1x1, (1, 1), (1, 1), (0, 0))),
 			('1x1_relu', nn.ReLU(True))
 		]))
 
-		self.b = nn.Sequential(OrderedDict([
+		b = nn.Sequential(OrderedDict([
 			('3x3_reduce', nn.Conv2d(inplane, outplane_b3x3_reduce, (1, 1), (1, 1), (0, 0))),
 			('3x3_relu1', nn.ReLU(True)),
 			('3x3', nn.Conv2d(outplane_b3x3_reduce, outplane_b3x3, (3, 3), (1, 1), (1, 1))),
 			('3x3_relu2', nn.ReLU(True))
 		]))
 
-		self.c = nn.Sequential(OrderedDict([
+		c = nn.Sequential(OrderedDict([
 			('5x5_reduce', nn.Conv2d(inplane, outplane_c5x5_reduce, (1, 1), (1, 1), (0, 0))),
 			('5x5_relu1', nn.ReLU(True)),
 			('5x5', nn.Conv2d(outplane_c5x5_reduce, outplane_c5x5, (5, 5), (1, 1), (2, 2))),
 			('5x5_relu2', nn.ReLU(True))
 		]))
 
-		self.d = nn.Sequential(OrderedDict([
+		d = nn.Sequential(OrderedDict([
 			('pool_pool', nn.MaxPool2d((3, 3), (1, 1), (1, 1))),
 			('pool_proj', nn.Conv2d(inplane, outplane_pool_proj, (1, 1), (1, 1), (0, 0))),
 			('pool_relu', nn.ReLU(True))
 		]))
-
-		for name, module in [(name, module) for name, module in list(self.named_modules()) if len(name) > 1]:
-			self.add_module(name, module)
+		
+		for container in [a, b, c, d]:
+			for name, module in container.named_children():
+				self.add_module(name, module)
+		self.branches = [a, b, c, d]
 
 	def forward(self, input):
-		return torch.cat((self.a(input), self.b(input), self.c(input), self.d(input)), 1)
+		return torch.cat([branch(input) for branch in self.branches], 1)

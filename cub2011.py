@@ -15,7 +15,7 @@ class Cub2011(ImageFolder, CIFAR10):
 	]
 	test_list = []
 	
-	def __init__(self, root, download=False, **kwargs):
+	def __init__(self, root, transform=None, target_transform=None, download=False, **kwargs):
 		self.root = root
 		if download:
 			self.download()
@@ -23,4 +23,4 @@ class Cub2011(ImageFolder, CIFAR10):
 		if not self._check_integrity():
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
-		ImageFolder.__init__(self, os.path.join(root, self.base_folder), **kwargs)
+		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
