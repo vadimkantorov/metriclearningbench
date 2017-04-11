@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import itertools
 import hickle
@@ -18,16 +19,17 @@ opts = dict(
 	DATA_DIR = 'data',
 	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
 	LOG = 'data/log.txt',
-	NUM_EPOCHS = 1,
-	BATCH_SIZE = 16,
-	TRAIN_CLASSES = 100,
+	SEED = 1,
 	NUM_THREADS = 16,
-	SEED = 1
+	TRAIN_CLASSES = 100,
+	NUM_EPOCHS = 30,
+	BATCH_SIZE = 16
 )
 
-def pairwise_euclidean_distance(A, eps = 1e-6):
-	norm = A.mul(A).sum(1).expand(A.size(0), A.size(0))
-	return torch.sqrt(norm + norm.t() - 2 * torch.mm(A, A.t()) + eps)
+def pairwise_euclidean_distance(A, eps = 1e-4):
+	prod = torch.mm(A, A.t())
+	norm = prod.diag().unsqueeze(1).expand_as(prod)
+	return torch.sqrt((norm + norm.t() - 2 * prod).clamp(min = 0) + eps) + eps
 
 class LiftedStruct(nn.Module):
 	input_side = 227
@@ -40,14 +42,14 @@ class LiftedStruct(nn.Module):
 	def forward(self, input):
 		return self.embedder(self.base_model(input).view(input.size(0), -1))
 
-	def criterion(self, input, labels, margin = 1.0, eps = 1e-6):
-		pos = torch.eq(*[labels.unsqueeze(d).expand(len(labels), len(labels)) for d in [0, 1]]).type_as(input)
-		d = pairwise_euclidean_distance(input, eps = eps)
-
-		margin_d = margin - d
-		neg_i = torch.mul(margin_d.exp(), 1 - pos).sum(0)
-		v = torch.log(neg_i.view(1, -1).expand_as(margin_d) + neg_i.view(-1, 1).expand_as(margin_d) + eps)
-		return torch.sum(torch.mul(pos, d + v).clamp(min = 0).pow(2)) / (2 * pos.sum())
+	def criterion(self, input, labels, margin = 1.0, eps = 1e-4):
+		d = pairwise_euclidean_distance(input)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(input)
+		m_d = margin - d
+		max_elem = m_d.max().unsqueeze(1).expand_as(m_d)
+		neg_i = torch.mul((m_d - max_elem).exp(), 1 - pos).sum(1).expand_as(d)
+		ppos = pos.triu(1)
+		return torch.sum(torch.mul(ppos, torch.log(neg_i + neg_i.t()) + d + max_elem).clamp(min = 0).pow(2)) / (2 * ppos.sum())
 
 	def sampler(self, batch_size, dataset, train_classes):
 		'''lazy sampling, not like in lifted_struct. they add to the pool all postiive combinations, then compute the average number of positive pairs per image, then sample for every image the same number of negative pairs'''
@@ -57,7 +59,7 @@ class LiftedStruct(nn.Module):
 			example_indices = []
 			for i in range(0, batch_size, 2):
 				perm = random.sample(xrange(train_classes), 2)
-				example_indices += [sample_from_class(perm[0]), sample_from_class(perm[0 if random.random() > 0.5 else 1])]
+				example_indices += [sample_from_class(perm[0]), sample_from_class(perm[0 if i == 0 or random.random() > 0.5 else 1])]
 			yield example_indices
 	
 	optim_algo = optim.SGD
@@ -119,7 +121,7 @@ for epoch in range(opts['NUM_EPOCHS']):
 	model.eval()
 	embeddings_all, labels_all = [], []
 	for batch_idx, batch in enumerate(loader_eval):
-		images, labels = [Variable(tensor.cuda()) for tensor in batch]
+		images, labels = [Variable(tensor.cuda(), volatile = True) for tensor in batch]
 		output = model(images)
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
