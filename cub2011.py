@@ -27,7 +27,9 @@ class Cub2011(ImageFolder, CIFAR10):
 		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
 
 	def recall(self, embeddings, labels, K = 1):
-		norm = embeddings.mul(embeddings).sum(1).expand(embeddings.size(0), embeddings.size(0))
-		D = norm + norm.t() - 2 * torch.mm(embeddings, embeddings.t())
+		prod = torch.mm(embeddings, embeddings.t())
+		norm = prod.diag().unsqueeze(1).expand_as(prod)
+		D = norm + norm.t() - 2 * prod
+
 		knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
 		return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
