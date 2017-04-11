@@ -18,8 +18,8 @@ opts = dict(
 	DATA_DIR = 'data',
 	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
 	LOG = 'data/log.txt',
-	NUM_EPOCHS = 400,
-	BATCH_SIZE = 128,
+	NUM_EPOCHS = 1,
+	BATCH_SIZE = 16,
 	TRAIN_CLASSES = 100,
 	NUM_THREADS = 16,
 	SEED = 1
@@ -27,9 +27,11 @@ opts = dict(
 
 def pairwise_euclidean_distance(A, eps = 1e-6):
 	norm = A.mul(A).sum(1).expand(A.size(0), A.size(0))
-	return torch.sqrt(norm + norm.t() - torch.mm(A, A.t()) + eps)
+	return torch.sqrt(norm + norm.t() - 2 * torch.mm(A, A.t()) + eps)
 
 class LiftedStruct(nn.Module):
+	input_side = 227
+
 	def __init__(self, base_model, embedding_size = 128):
 		super(LiftedStruct, self).__init__()
 		self.base_model = base_model
@@ -59,7 +61,7 @@ class LiftedStruct(nn.Module):
 			yield example_indices
 	
 	optim_algo = optim.SGD
-	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 2e-4, dampening = 0)
+	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
 
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
 	return type('', (), dict(
@@ -75,17 +77,26 @@ base_model_weights = hickle.load(opts['BASE_MODEL_WEIGHTS'])
 base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
 model = LiftedStruct(base_model)
 
-dataset = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
-	transforms.Scale(256),
-	transforms.CenterCrop(227),
+normalize = transforms.Compose([
 	transforms.ToTensor(),
 	transforms.Lambda(lambda x: x * 255.0),
 	transforms.Normalize(mean = [122.7717, 115.9465, 102.9801], std = [1, 1, 1]),
 	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])])
+])
+
+dataset_train = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
+	transforms.RandomSizedCrop(model.input_side),
+	transforms.RandomHorizontalFlip(),
+	normalize
+]), download = True)
+dataset_eval = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
+	transforms.Scale(256),
+	transforms.CenterCrop(model.input_side),
+	normalize
 ]), download = True)
 
-loader_train = torch.utils.data.DataLoader(dataset, sampler = adapt_sampler(opts['BATCH_SIZE'], dataset, model.sampler, train_classes = opts['TRAIN_CLASSES']), num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
-loader_eval = torch.utils.data.DataLoader(dataset, sampler = [example_idx for example_idx in range(len(dataset)) if dataset.imgs[example_idx][1] >= opts['TRAIN_CLASSES']], shuffle = False, num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts['BATCH_SIZE'], dataset_train, model.sampler, train_classes = opts['TRAIN_CLASSES']), num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
+loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= opts['TRAIN_CLASSES']], shuffle = False, num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
 
 model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
@@ -108,9 +119,9 @@ for epoch in range(opts['NUM_EPOCHS']):
 	model.eval()
 	embeddings_all, labels_all = [], []
 	for batch_idx, batch in enumerate(loader_eval):
-		images, labels = [Variable(tensor.cuda(), volatile = True) for tensor in batch]
+		images, labels = [Variable(tensor.cuda()) for tensor in batch]
 		output = model(images)
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
 		print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-	log.write('recall@1 epoch {}: {}\n'.format(epoch, dataset.recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0))))
+	log.write('recall@1 epoch {}: {}\n'.format(epoch, dataset_eval.recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0))))
