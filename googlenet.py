@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 
 class GoogLeNet(nn.Sequential):
+	output_size = 1024
+	input_side = 227
+
 	def __init__(self):
 		super(GoogLeNet, self).__init__(OrderedDict([
 			('conv1', nn.Sequential(OrderedDict([

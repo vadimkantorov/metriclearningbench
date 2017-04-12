@@ -32,31 +32,22 @@ def pairwise_euclidean_distance(A, eps = 1e-4):
 	return torch.sqrt((norm + norm.t() - 2 * prod).clamp(min = 0) + eps) + eps
 
 class LiftedStruct(nn.Module):
-	input_side = 227
-
 	def __init__(self, base_model, embedding_size = 128):
 		super(LiftedStruct, self).__init__()
 		self.base_model = base_model
-		self.embedder = nn.Linear(1024, embedding_size)
+		self.embedder = nn.Linear(base_model.output_size, embedding_size)
 
 	def forward(self, input):
 		return self.embedder(self.base_model(input).view(input.size(0), -1))
 
 	def criterion(self, input, labels, margin = 1.0, eps = 1e-4):
-		d = pairwise_euclidean_distance(input)
-		if d.ne(d).sum().data[0] > 0:
-			print('ACHTUNG d')
-			import IPython; IPython.embed()
+		d = pairwise_euclidean_distance(input, eps = eps)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(input)
 		m_d = margin - d
 		max_elem = m_d.max().unsqueeze(1).expand_as(m_d)
 		neg_i = torch.mul((m_d - max_elem).exp(), 1 - pos).sum(1).expand_as(d)
-		ppos = pos.triu(1)
-		tmp = torch.log(neg_i + neg_i.t()) + d + max_elem
-		if tmp.ne(tmp).sum().data[0] > 0:
-			print('ACHTUNG tmp')
-			import IPython; IPython.embed()
-		return torch.sum(torch.mul(ppos, tmp).clamp(min = 0).pow(2)) / (2 * ppos.sum())
+		pos = pos.triu(1)
+		return torch.sum(torch.mul(pos, torch.log(neg_i + neg_i.t()) + d + max_elem).clamp(min = 0).pow(2)) / (2 * pos.sum())
 
 	def sampler(self, batch_size, dataset, train_classes):
 		'''lazy sampling, not like in lifted_struct. they add to the pool all postiive combinations, then compute the average number of positive pairs per image, then sample for every image the same number of negative pairs'''
@@ -94,13 +85,13 @@ normalize = transforms.Compose([
 ])
 
 dataset_train = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
-	transforms.RandomSizedCrop(model.input_side),
+	transforms.RandomSizedCrop(base_model.input_side),
 	transforms.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
 dataset_eval = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
 	transforms.Scale(256),
-	transforms.CenterCrop(model.input_side),
+	transforms.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
 
@@ -117,9 +108,6 @@ for epoch in range(opts['NUM_EPOCHS']):
 	for batch_idx, batch in enumerate(loader_train):
 		images, labels = [Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
-		if loss.data[0] != loss.data[0]:
-			print('ACHTUNG loss')
-			sys.exit(1)
 		loss_all.append(loss.data[0])
 		
 		optimizer.zero_grad()
