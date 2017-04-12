@@ -44,12 +44,19 @@ class LiftedStruct(nn.Module):
 
 	def criterion(self, input, labels, margin = 1.0, eps = 1e-4):
 		d = pairwise_euclidean_distance(input)
+		if d.ne(d).sum().data[0] > 0:
+			print('ACHTUNG d')
+			import IPython; IPython.embed()
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(input)
 		m_d = margin - d
 		max_elem = m_d.max().unsqueeze(1).expand_as(m_d)
 		neg_i = torch.mul((m_d - max_elem).exp(), 1 - pos).sum(1).expand_as(d)
 		ppos = pos.triu(1)
-		return torch.sum(torch.mul(ppos, torch.log(neg_i + neg_i.t()) + d + max_elem).clamp(min = 0).pow(2)) / (2 * ppos.sum())
+		tmp = torch.log(neg_i + neg_i.t()) + d + max_elem
+		if tmp.ne(tmp).sum().data[0] > 0:
+			print('ACHTUNG tmp')
+			import IPython; IPython.embed()
+		return torch.sum(torch.mul(ppos, tmp).clamp(min = 0).pow(2)) / (2 * ppos.sum())
 
 	def sampler(self, batch_size, dataset, train_classes):
 		'''lazy sampling, not like in lifted_struct. they add to the pool all postiive combinations, then compute the average number of positive pairs per image, then sample for every image the same number of negative pairs'''
@@ -110,6 +117,9 @@ for epoch in range(opts['NUM_EPOCHS']):
 	for batch_idx, batch in enumerate(loader_train):
 		images, labels = [Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
+		if loss.data[0] != loss.data[0]:
+			print('ACHTUNG loss')
+			sys.exit(1)
 		loss_all.append(loss.data[0])
 		
 		optimizer.zero_grad()
