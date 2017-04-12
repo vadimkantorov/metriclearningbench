@@ -46,8 +46,7 @@ class LiftedStruct(nn.Module):
 		m_d = margin - d
 		max_elem = m_d.max().unsqueeze(1).expand_as(m_d)
 		neg_i = torch.mul((m_d - max_elem).exp(), 1 - pos).sum(1).expand_as(d)
-		pos = pos.triu(1)
-		return torch.sum(torch.mul(pos, torch.log(neg_i + neg_i.t()) + d + max_elem).clamp(min = 0).pow(2)) / (2 * pos.sum())
+		return torch.sum(torch.mul(pos.triu(1), torch.log(neg_i + neg_i.t()) + d + max_elem).clamp(min = 0).pow(2)) / (pos.sum() - len(d))
 
 	def sampler(self, batch_size, dataset, train_classes):
 		'''lazy sampling, not like in lifted_struct. they add to the pool all postiive combinations, then compute the average number of positive pairs per image, then sample for every image the same number of negative pairs'''
@@ -80,7 +79,7 @@ model = LiftedStruct(base_model)
 normalize = transforms.Compose([
 	transforms.ToTensor(),
 	transforms.Lambda(lambda x: x * 255.0),
-	transforms.Normalize(mean = [122.7717, 115.9465, 102.9801], std = [1, 1, 1]),
+	transforms.Normalize(mean = base_model.rgb_mean, std = base_model.rgb_std),
 	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])])
 ])
 

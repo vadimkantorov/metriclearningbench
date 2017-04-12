@@ -5,6 +5,8 @@ import torch.nn as nn
 class GoogLeNet(nn.Sequential):
 	output_size = 1024
 	input_side = 227
+	rgb_mean = [122.7717, 115.9465, 102.9801]
+	rgb_std = [1, 1, 1]
 
 	def __init__(self):
 		super(GoogLeNet, self).__init__(OrderedDict([
