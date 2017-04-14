@@ -12,9 +12,13 @@ class Cub2011(ImageFolder, CIFAR10):
 	tgz_md5 = '97eceeb196236b17998738112f37df78'
 	
 	train_list = [
-		['180.Wilson_Warbler/Wilson_Warbler_0002_175571.jpg', '0c763ca2ad60ed3ae43e76a04df63983']
+		['001.Black_footed_Albatross/Black_Footed_Albatross_0001_796111.jpg', '4c84da568f89519f84640c54b7fba7c2'],
+		['002.Laysan_Albatross/Laysan_Albatross_0001_545.jpg', 'e7db63424d0e384dba02aacaf298cdc0'],
 	]
-	test_list = []
+	test_list = [
+		['198.Rock_Wren/Rock_Wren_0001_189289.jpg', '487d082f1fbd58faa7b08aa5ede3cc00'],
+		['200.Common_Yellowthroat/Common_Yellowthroat_0003_190521.jpg', '96fd60ce4b4805e64368efc32bf5c6fe']
+	]
 	
 	def __init__(self, root, transform=None, target_transform=None, download=False, **kwargs):
 		self.root = root
@@ -25,11 +29,3 @@ class Cub2011(ImageFolder, CIFAR10):
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
 		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
-
-	def recall(self, embeddings, labels, K = 1):
-		prod = torch.mm(embeddings, embeddings.t())
-		norm = prod.diag().unsqueeze(1).expand_as(prod)
-		D = norm + norm.t() - 2 * prod
-
-		knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
-		return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
