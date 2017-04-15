@@ -1,9 +1,11 @@
 import os
+import scipy.io
 import torch
 import torch.utils.data as data
 import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets import CIFAR10
+from torchvision.datasets.folder import default_loader
 
 class Cars196(ImageFolder, CIFAR10):
 	base_folder = 'car_ims'
@@ -16,18 +18,30 @@ class Cars196(ImageFolder, CIFAR10):
 	filename_devkit = 'cars_devkit.tgz'
 	tgz_md5_devkit = 'c3b158d763b6e2245038c8ad08e45376'
 
-	train_list = []
-	test_list = []
-
-	def download(self):
-		pass
+	train_list = [
+		['000001.jpg', '2d44a28f071aeaac9c0802fddcde452e'],
+		['000002.jpg', '531fbde520bee33dcbfced6ae588c8f9']
+	]
+	test_list = [
+		['014981.jpg', 'e7238ce05218a6e4dc92cda5e8971f17'],
+		['014982.jpg', 'b2a95af89329d32d5fe2b74f0922378e']
+	]
 	
 	def __init__(self, root, train=False, transform=None, target_transform=None, download=False, **kwargs):
 		self.root = root
+		self.transform = transform
+		self.target_transform = target_transform
+		self.loader = default_loader
+
 		if download:
+			base_folder, url, filename, tgz_md5 = self.base_folder, self.url, self.filename, self.tgz_md5
+			self.base_folder, self.url, self.filename, self.tgz_md5 = self.base_folder_devkit, self.url_devkit, self.filename_devkit, self.tgz_md5_devkit
+			self.download()
+			self.base_folder, self.url, self.filename, self.tgz_md5	= base_folder, url, filename, tgz_md5
 			self.download()
 
 		if not self._check_integrity():
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
-		ImageFolder.__init__(self, os.path.join(root, self.base_folder), transform = transform, target_transform = target_transform, **kwargs)
+
+		self.imgs = [(os.path.join(root, self.base_folder, '0' + a[-1][0]), int(a[-2][0]) - 1) for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, 'cars_{}_annos.mat'.format('train' if train else 'test')))['annotations'][0]]
