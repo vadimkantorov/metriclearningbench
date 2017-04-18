@@ -1,4 +1,4 @@
-# [WIP] Train on CUB2011
+# [WIP] Train LiftedStruct on CUB2011
 ```shell
 python train.py
 ```
