@@ -31,7 +31,7 @@ class Triplet(Model):
 	def criterion(self, input, labels, margin = 1.0):
 		d = pdist(input, squared = True)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(input)
-		T = d.unsqueeze(1).expand((len(d),) * 3) # [i][k][j]
+		T = d.unsqueeze(1).expand(*(len(d),) * 3) # [i][k][j]
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * torch.clamp(T + T.transpose(1, 2) - margin, min = 0)).sum() / M.sum() #[i][k][j] = 
 
@@ -39,7 +39,7 @@ class TripletRatio(Model):
 	def criterion(self, input, labels, margin = 0.1, eps = 1e-4):
 		d = pdist(input, squared = False, eps = eps)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(input)
-		T = d.unsqueeze(1).expand((len(d),) * 3) # [i][k][j]
+		T = d.unsqueeze(1).expand(*(len(d),) * 3) # [i][k][j]
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum() #[i][k][j] = 
 
