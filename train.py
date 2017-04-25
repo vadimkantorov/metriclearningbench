@@ -10,8 +10,13 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 
 import googlenet
+
 import cub2011
+import cars196
+import stanford_online_products
+
 import model
+import sampler
 
 assert os.environ.get('CUDA_VISIBLE_DEVICES')
 
@@ -65,7 +70,7 @@ dataset_eval = cub2011.CUB2011(opts.DATA_DIR, transforms.Compose([
 	normalize
 ]), download = True)
 
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, model.sampler, train_classes = 100), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple, train_classes = 100), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= 100, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
 model.cuda()
