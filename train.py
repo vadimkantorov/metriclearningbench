@@ -21,6 +21,9 @@ import sampler
 assert os.environ.get('CUDA_VISIBLE_DEVICES')
 
 parser = argparse.ArgumentParser()
+LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
+parser.add_argument('--DATASET', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
+parser.add_argument('--BASE_MODEL', choices = dict(GOOGLENET = googlenet.GoogLeNet), default = googlenet.GoogLeNet, action = LookupChoices)
 parser.add_argument('--DATA_DIR', default = 'data')
 parser.add_argument('--BASE_MODEL_WEIGHTS', default = 'data/googlenet.h5')
 parser.add_argument('--LOG', default = 'data/log.txt')
@@ -47,7 +50,7 @@ def recall(self, embeddings, labels, K = 1):
 for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
 	set_random_seed(opts.SEED)
 
-base_model = googlenet.GoogLeNet()
+base_model = opts.BASE_MODEL()
 base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
 base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
 model = model.LiftedStruct(base_model)
@@ -59,19 +62,19 @@ normalize = transforms.Compose([
 	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])])
 ])
 
-dataset_train = cub2011.CUB2011(opts.DATA_DIR, transforms.Compose([
+dataset_train = opts.DATASET(opts.DATA_DIR, train = True, transform = transforms.Compose([
 	transforms.RandomSizedCrop(base_model.input_side),
 	transforms.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
-dataset_eval = cub2011.CUB2011(opts.DATA_DIR, transforms.Compose([
+dataset_eval = opts.DATASET(opts.DATA_DIR, train = False, transform = transforms.Compose([
 	transforms.Scale(256),
 	transforms.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
 
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple, train_classes = 100), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
-loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= 100, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
+loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= 100], shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
 model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
