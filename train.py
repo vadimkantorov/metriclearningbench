@@ -22,6 +22,7 @@ parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--DATASET', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
 parser.add_argument('--BASE_MODEL', choices = dict(GOOGLENET = googlenet.GoogLeNet), default = googlenet.GoogLeNet, action = LookupChoices)
+parser.add_argument('--MODEL', choices = dict(LIFTED_STRUCT = model.LiftedStruct), default = model.LiftedStruct, action = LookupChoices)
 parser.add_argument('--DATA_DIR', default = 'data')
 parser.add_argument('--BASE_MODEL_WEIGHTS', default = 'data/googlenet.h5')
 parser.add_argument('--LOG', default = 'data/log.txt')
@@ -51,7 +52,7 @@ for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_a
 base_model = opts.BASE_MODEL()
 base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
 base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
-model = model.LiftedStruct(base_model)
+model = opts.MODEL(base_model)
 
 normalize = transforms.Compose([
 	transforms.ToTensor(),
