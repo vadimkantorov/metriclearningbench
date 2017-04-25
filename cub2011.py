@@ -5,7 +5,7 @@ import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets import CIFAR10
 
-class Cub2011(ImageFolder, CIFAR10):
+class CUB2011(ImageFolder, CIFAR10):
 	base_folder = 'CUB_200_2011/images'
 	url = 'http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
 	filename = 'CUB_200_2011.tgz'

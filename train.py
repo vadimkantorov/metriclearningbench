@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import argparse
 import itertools
 import hickle
 import torch
@@ -14,16 +15,15 @@ import model
 
 assert os.environ.get('CUDA_VISIBLE_DEVICES')
 
-opts = dict(
-	DATA_DIR = 'data',
-	BASE_MODEL_WEIGHTS = 'data/googlenet.h5',
-	LOG = 'data/log.txt',
-	SEED = 1,
-	NUM_THREADS = 16,
-	TRAIN_CLASSES = 100,
-	NUM_EPOCHS = 30,
-	BATCH_SIZE = 16
-)
+parser = argparse.ArgumentParser()
+parser.add_argument('--DATA_DIR', default = 'data')
+parser.add_argument('--BASE_MODEL_WEIGHTS', default = 'data/googlenet.h5')
+parser.add_argument('--LOG', default = 'data/log.txt')
+parser.add_argument('--SEED', default = 1, type = int)
+parser.add_argument('--NUM_THREADS', default = 16, type = int)
+parser.add_argument('--NUM_EPOCHS', default = 30, type = int)
+parser.add_argument('--BATCH_SIZE', default = 16, type = int)
+opts = parser.parse_args()
 
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
 	return type('', (), dict(
@@ -40,10 +40,10 @@ def recall(self, embeddings, labels, K = 1):
 	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
 
 for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
-	set_random_seed(opts['SEED'])
+	set_random_seed(opts.SEED)
 
 base_model = googlenet.GoogLeNet()
-base_model_weights = hickle.load(opts['BASE_MODEL_WEIGHTS'])
+base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
 base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
 model = model.LiftedStruct(base_model)
 
@@ -54,25 +54,25 @@ normalize = transforms.Compose([
 	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])])
 ])
 
-dataset_train = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
+dataset_train = cub2011.CUB2011(opts.DATA_DIR, transforms.Compose([
 	transforms.RandomSizedCrop(base_model.input_side),
 	transforms.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
-dataset_eval = cub2011.Cub2011(opts['DATA_DIR'], transforms.Compose([
+dataset_eval = cub2011.CUB2011(opts.DATA_DIR, transforms.Compose([
 	transforms.Scale(256),
 	transforms.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
 
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts['BATCH_SIZE'], dataset_train, model.sampler, train_classes = opts['TRAIN_CLASSES']), num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
-loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= opts['TRAIN_CLASSES']], shuffle = False, num_workers = opts['NUM_THREADS'], batch_size = opts['BATCH_SIZE'])
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, model.sampler, train_classes = 100), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
+loader_eval = torch.utils.data.DataLoader(dataset_eval, sampler = [example_idx for example_idx in range(len(dataset_eval)) if dataset_eval.imgs[example_idx][1] >= 100, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
 model.cuda()
 optimizer = model.optim_algo(model.parameters(), **model.optim_params)
 
-log = open(opts['LOG'], 'w', 0)
-for epoch in range(opts['NUM_EPOCHS']):
+log = open(opts.LOG, 'w', 0)
+for epoch in range(opts.NUM_EPOCHS):
 	model.train()
 	loss_all = []
 	for batch_idx, batch in enumerate(loader_train):
