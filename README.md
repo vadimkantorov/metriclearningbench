@@ -11,5 +11,8 @@
 
 ### Train lifted structured embedding on CUB2011
 ```shell
-python train.py
+python train.py --MODEL=LIFTED_STRUCT --BASE_MODEL=GOOGLENET --DATASET=CUB2011
 ```
+
+### CUB2011 results
+TODO
