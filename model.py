@@ -76,14 +76,17 @@ class Pddm(Model):
 		u_ = l2_normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
 		v_ = l2_normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view(len(features), len(features))
-		s = (s - s.min().expand_as(s)) / (s.max() - s.min()).expand_as(s)
-		
+		sneg = s * (1 - pos)
+				
 		i, j = min([(s[i, j].data[0], (i, j)) for i, j in pos.data.nonzero()])[1]
-		k, l = (s * (1 - pos)).max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
+		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
+
+		smin, smax = torch.min(sneg[i], sneg[j]).min(), torch.max(sneg[i], sneg[j]).max()
+		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
 
 		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
 		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
 
 		return E_m + Lambda * E_e
 	
-	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 5e-4)
+	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
