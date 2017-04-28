@@ -31,14 +31,6 @@ class LiftedStruct(Model):
 		neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
 		return torch.sum(torch.mul(pos.triu(1), torch.log(neg_i + neg_i.t()) + d).clamp(min = 0).pow(2)) / (pos.sum() - len(d))
 
-class TripletWorking(Model):
-	def criterion(self, features, labels, margin = 1.0):
-		features = features.view(features.size(0) / 3, 3, *features.size()[1:])
-		anchor, positive, negative = features.select(1, 0), features.select(1, 1), features.select(1, 2)
-		return F.triplet_margin_loss(anchor, positive, negative, margin = margin)
-
-	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 5e-4)
-
 class Triplet(Model):
 	def criterion(self, features, labels, margin = 1.0):
 		d = pdist(features, squared = False)
@@ -86,14 +78,12 @@ class Pddm(Model):
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view(len(features), len(features))
 		s = (s - s.min().expand_as(s)) / (s.max() - s.min()).expand_as(s)
 		
-		i, j = min([(s[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
+		i, j = min([(s[i, j].data[0], (i, j)) for i, j in pos.data.nonzero()])[1]
 		k, l = (s * (1 - pos)).max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 
 		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
 		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
 
 		return E_m + Lambda * E_e
-		#return E_e
-		#return E_m
 	
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 5e-4)
