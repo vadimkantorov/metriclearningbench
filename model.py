@@ -33,11 +33,21 @@ class LiftedStruct(Model):
 
 class Triplet(Model):
 	def criterion(self, features, labels, margin = 1.0):
+		features = features.view(features.size(0) / 3, 3, *features.size()[1:])
+		anchor, positive, negative = features.select(1, 0), features.select(1, 1), features.select(1, 2)
+		return F.triplet_margin_loss(anchor, positive, negative, margin = margin)
+
+	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 5e-4)
+
+class TripletAll(Model):
+	def criterion(self, features, labels, margin = 1.0):
 		d = pdist(features, squared = True)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
-		T = d.unsqueeze(1).expand(*(len(d),) * 3) # [i][k][j]
+		T = d.unsqueeze(1).expand(*(len(d),) * 3) # T[i][j][k] = d[i][k][j]
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
-		return (M * torch.clamp(T - T.transpose(1, 2) + margin, min = 0)).sum() / M.sum() #[i][k][j] = 
+		return (M * torch.clamp(T - T.transpose(1, 2) + margin, min = 0)).sum() / M.sum()
+	
+	optim_params = dict(lr = 1e-6, momentum = 0.9, weight_decay = 5e-4)
 
 class TripletRatio(Model):
 	def criterion(self, features, labels, margin = 0.1, eps = 1e-4):
@@ -73,9 +83,8 @@ class Pddm(Model):
 		v = (f1 + f2) / 2
 		u_ = l2_normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
 		v_ = l2_normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
-
-		c = F.relu(F.dropout(self.wc(torch.cat((u_, v_), -1))))
-		s = self.ws(c).view(len(features), len(features))
+		s = self.ws(F.relu(F.dropout(self.wc(torch.cat((u_, v_), -1))))).view(len(features), len(features))
+		
 		i, j = min([(s[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
 		k, l = (s * (1 - pos)).max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 
