@@ -29,7 +29,7 @@ parser.add_argument('--LOG', default = 'data/log.txt')
 parser.add_argument('--SEED', default = 1, type = int)
 parser.add_argument('--NUM_THREADS', default = 16, type = int)
 parser.add_argument('--NUM_EPOCHS', default = 30, type = int)
-parser.add_argument('--BATCH_SIZE', default = 16, type = int)
+parser.add_argument('--BATCH_SIZE', default = 64, type = int)
 opts = parser.parse_args()
 
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
