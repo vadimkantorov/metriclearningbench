@@ -29,7 +29,7 @@ parser.add_argument('--LOG', default = 'data/log.txt')
 parser.add_argument('--SEED', default = 1, type = int)
 parser.add_argument('--NUM_THREADS', default = 16, type = int)
 parser.add_argument('--NUM_EPOCHS', default = 30, type = int)
-parser.add_argument('--BATCH_SIZE', default = 18, type = int)
+parser.add_argument('--BATCH_SIZE', default = 16, type = int)
 opts = parser.parse_args()
 
 def adapt_sampler(batch_size, dataset, sampler, **kwargs):
@@ -72,7 +72,7 @@ dataset_eval = opts.DATASET(opts.DATA_DIR, train = False, transform = transforms
 	normalize
 ]), download = True)
 
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.triplet), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE, drop_last = True)
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE, drop_last = True)
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
 model.cuda()

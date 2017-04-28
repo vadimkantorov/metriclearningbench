@@ -9,7 +9,7 @@
 2. [CARS196](http://ai.stanford.edu/~jkrause/cars/car_dataset.html) [WIP]
 3. [Stanford Online Products](http://cvgl.stanford.edu/projects/lifted_struct/) [WIP]
 
-### Examples
+# Examples
 ```shell
 # train lifted structured embedding on CUB2011
 python train.py --MODEL=LIFTED_STRUCT --BASE_MODEL=GOOGLENET --DATASET=CUB2011
@@ -18,7 +18,7 @@ python train.py --MODEL=LIFTED_STRUCT --BASE_MODEL=GOOGLENET --DATASET=CUB2011
 python train.py --MODEL=TRIPLET --BASE_MODEL=GOOGLENET --DATASET=CUB2011
 ```
 
-### CUB2011 results
+# CUB2011 results
 | model | R1 @ epoch0 | R1 @ epoch10 | R1 @ epoch30 |
 | --- | --- | --- | --- |
 | LIFTED_STRUCT | | | |

@@ -15,7 +15,7 @@ def simple(batch_size, dataset, prob_other = 0.5):
 		for i in range(0, batch_size, 2):
 			perm = random.sample(images_by_class.keys(), 2)
 			example_indices += [sample_from_class(images_by_class, perm[0]), sample_from_class(images_by_class, perm[0 if i == 0 or random.random() > prob_other else 1])]
-		yield example_indices
+		yield example_indices[:batch_size]
 
 def triplet(batch_size, dataset):
 	images_by_class = index_dataset(dataset)
@@ -24,4 +24,4 @@ def triplet(batch_size, dataset):
 		for i in range(0, batch_size, 3):
 			perm = random.sample(images_by_class.keys(), 2)
 			example_indices += [sample_from_class(images_by_class, perm[0]), sample_from_class(images_by_class, perm[0]), sample_from_class(images_by_class, perm[1])]
-		yield example_indices
+		yield example_indices[:batch_size]
