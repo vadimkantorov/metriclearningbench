@@ -14,6 +14,7 @@ class Model(nn.Module):
 	
 	optim_algo = optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
+	optim_params_annealed = dict(epoch = float('nan'))
 
 def pdist(A, squared = False, eps = 1e-4):
 	prod = torch.mm(A, A.t())
@@ -78,11 +79,12 @@ class Pddm(Model):
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view(len(features), len(features))
 		sneg = s * (1 - pos)
 				
-		i, j = min([(s[i, j].data[0], (i, j)) for i, j in pos.data.nonzero()])[1]
+		i, j = min([(s[i, j].data[0], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
 		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 
-		smin, smax = torch.min(sneg[i], sneg[j]).min(), torch.max(sneg[i], sneg[j]).max()
+		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
 		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
+		#s = (s - s.mean().expand_as(s)) / s.std().expand_as(s)
 
 		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
 		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
@@ -90,3 +92,4 @@ class Pddm(Model):
 		return E_m + Lambda * E_e
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
+	#optim_params_annealed = dict(lr = 1e-5, epoch = 15)

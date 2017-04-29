@@ -28,7 +28,7 @@ parser.add_argument('--BASE_MODEL_WEIGHTS', default = 'data/googlenet.h5')
 parser.add_argument('--LOG', default = 'data/log.txt')
 parser.add_argument('--SEED', default = 1, type = int)
 parser.add_argument('--NUM_THREADS', default = 16, type = int)
-parser.add_argument('--NUM_EPOCHS', default = 30, type = int)
+parser.add_argument('--NUM_EPOCHS', default = 200, type = int)
 parser.add_argument('--BATCH_SIZE', default = 64, type = int)
 opts = parser.parse_args()
 
@@ -80,6 +80,9 @@ optimizer = model.optim_algo(model.parameters(), **model.optim_params)
 
 log = open(opts.LOG, 'w', 0)
 for epoch in range(opts.NUM_EPOCHS):
+	if epoch > model.optim_params_annealed['epoch']:
+		for param_group in optimizer.param_groups:
+			param_group.update(model.optim_params_annealed)
 	model.train()
 	loss_all = []
 	for batch_idx, batch in enumerate(loader_train):
