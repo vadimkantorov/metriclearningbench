@@ -57,12 +57,13 @@ class Pddm(Model):
 	def __init__(self, base_model):
 		nn.Module.__init__(self)
 		self.base_model = base_model
+
 		d = base_model.output_size
 		self.wu = nn.Linear(d, d)
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
-		self.dropout = nn.Dropout()
+		self.dropout = nn.Dropout(p = 0.99)
 	
 	def forward(self, input):
 		return l2_normalize(self.base_model(input).view(input.size(0), -1))
@@ -71,27 +72,25 @@ class Pddm(Model):
 		d = pdist(features, squared = False)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
 
-		f1, f2 = [features.unsqueeze(dim).expand(len(features), *features.size()) for dim in [0, 1]]
+		f1, f2 = [features.detach().unsqueeze(dim).expand(len(features), *features.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
 		v = (f1 + f2) / 2
 		u_ = l2_normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
 		v_ = l2_normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
-		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view(len(features), len(features))
+		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
 		sneg = s * (1 - pos)
 				
-		i, j = min([(s[i, j].data[0], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
+		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
 		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 		assert pos[i, j] == 1 and pos[i, k] == 0 and pos[j, l] == 0
 
 		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
-		print(s[i, j].data[0], s[i, k].data[0])
 		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
-		#s = (s - s.mean().expand_as(s)) / s.std().expand_as(s)
 
 		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
 		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
 
-		return E_m# + Lambda * E_e
+		return E_m + Lambda * E_e
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	#optim_params_annealed = dict(lr = 1e-5, epoch = 15)
+	#optim_params_annealed = dict(lr = 1e-5, epoch = 5)
