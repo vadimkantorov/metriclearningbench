@@ -25,6 +25,10 @@ def pdist(A, squared = False, eps = 1e-4):
 def l2_normalize(A, eps = 1e-4):
 	return A / (A.norm(p = 2, dim = -1).expand_as(A) + eps)
 
+class Untrained(Model):
+	def forward(self, input):
+		return self.base_model(input).view(input.size(0), -1)
+
 class LiftedStruct(Model):
 	def criterion(self, features, labels, margin = 1.0, eps = 1e-4):
 		d = pdist(features, squared = False, eps = eps)
