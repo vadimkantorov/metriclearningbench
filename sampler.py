@@ -25,3 +25,12 @@ def triplet(batch_size, dataset):
 			perm = random.sample(images_by_class.keys(), 2)
 			example_indices += [sample_from_class(images_by_class, perm[0]), sample_from_class(images_by_class, perm[0]), sample_from_class(images_by_class, perm[1])]
 		yield example_indices[:batch_size]
+
+def pddm(batch_size, dataset):
+	images_by_class = index_dataset(dataset)
+	while True:
+		class0 = random.choice(images_by_class.keys())
+		example_indices = [sample_from_class(images_by_class, class0) for k in range(4)]
+		for i in range(len(example_indices), batch_size):
+			example_indices.append(random.randrange(len(dataset)))
+		yield example_indices[:batch_size]

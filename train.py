@@ -76,13 +76,12 @@ loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sample
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
 model.cuda()
-optimizer = model.optim_algo(model.parameters(), **model.optim_params)
+weights, biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias] for is_bias in [False, True]]
+optimizer = model.optim_algo([dict(params = weights), dict(params = biases, weight_decay = 0.0)], **model.optim_params)
 
 log = open(opts.LOG, 'w', 0)
 for epoch in range(opts.NUM_EPOCHS):
-	if epoch > model.optim_params_annealed['epoch']:
-		for param_group in optimizer.param_groups:
-			param_group.update(model.optim_params_annealed)
+	model.adjust_learning_rate(epoch, optimizer)
 	model.train()
 	loss_all = []
 	for batch_idx, batch in enumerate(loader_train):

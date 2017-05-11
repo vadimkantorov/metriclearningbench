@@ -12,6 +12,11 @@ class Model(nn.Module):
 	def forward(self, input):
 		return self.embedder(self.base_model(input).view(input.size(0), -1))
 	
+	def adjust_learning_rate(self, epoch, optimizer):
+		if epoch > self.optim_params_annealed['epoch']:
+			for param_group in optimizer.param_groups:
+				param_group.update(self.optim_params_annealed)
+	
 	optim_algo = optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
 	optim_params_annealed = dict(epoch = float('nan'))
@@ -22,9 +27,6 @@ def pdist(A, squared = False, eps = 1e-4):
 	res = (norm + norm.t() - 2 * prod).clamp(min = 0)
 	return res if squared else (res + eps).sqrt() + eps 
 		
-def l2_normalize(A, eps = 1e-4):
-	return A / (A.norm(p = 2, dim = -1).expand_as(A) + eps)
-
 class Untrained(Model):
 	def forward(self, input):
 		return self.base_model(input).view(input.size(0), -1)
@@ -61,26 +63,27 @@ class Pddm(Model):
 	def __init__(self, base_model):
 		nn.Module.__init__(self)
 		self.base_model = base_model
+		#self.base_model.drop5.p = 0
 
 		d = base_model.output_size
 		self.wu = nn.Linear(d, d)
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
-		self.dropout = nn.Dropout(p = 0.99)
+		self.dropout = nn.Dropout(p = 0.9)
 	
 	def forward(self, input):
-		return l2_normalize(self.base_model(input).view(input.size(0), -1))
+		return F.normalize(self.base_model(input).view(input.size(0), -1))
 
 	def criterion(self, features, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
-		d = pdist(features, squared = False)
+		d = pdist(features, squared = True)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
 
 		f1, f2 = [features.detach().unsqueeze(dim).expand(len(features), *features.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
 		v = (f1 + f2) / 2
-		u_ = l2_normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
-		v_ = l2_normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
+		u_ = F.normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
+		v_ = F.normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
 		sneg = s * (1 - pos)
 				
