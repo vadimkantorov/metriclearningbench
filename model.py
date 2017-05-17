@@ -63,14 +63,13 @@ class Pddm(Model):
 	def __init__(self, base_model):
 		nn.Module.__init__(self)
 		self.base_model = base_model
-		#self.base_model.drop5.p = 0
-
 		d = base_model.output_size
+		
 		self.wu = nn.Linear(d, d)
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
-		self.dropout = nn.Dropout(p = 0.9)
+		self.dropout = nn.Dropout(p = 0.5)
 	
 	def forward(self, input):
 		return F.normalize(self.base_model(input).view(input.size(0), -1))
@@ -85,8 +84,8 @@ class Pddm(Model):
 		u_ = F.normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
 		v_ = F.normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
+		
 		sneg = s * (1 - pos)
-				
 		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
 		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 		assert pos[i, j] == 1 and pos[i, k] == 0 and pos[j, l] == 0
