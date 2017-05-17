@@ -44,7 +44,7 @@ class GoogLeNet(nn.Sequential):
 
 			('pool5', nn.AvgPool2d((7, 7), (1, 1), ceil_mode = True)),
 
-			('drop5', nn.Dropout(0.4))
+			#('drop5', nn.Dropout(0.4))
 		]))
 
 class InceptionModule(nn.Module):
