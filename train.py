@@ -9,14 +9,14 @@ import torch.utils.data
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 
-import googlenet
 import cub2011
 import cars196
 import stanford_online_products
+import googlenet
 import model
 import sampler
 
-assert os.environ.get('CUDA_VISIBLE_DEVICES')
+assert os.getenv('CUDA_VISIBLE_DEVICES')
 
 parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
@@ -32,27 +32,15 @@ parser.add_argument('--NUM_EPOCHS', default = 200, type = int)
 parser.add_argument('--BATCH_SIZE', default = 64, type = int)
 opts = parser.parse_args()
 
-def adapt_sampler(batch_size, dataset, sampler, **kwargs):
-	return type('', (), dict(
-		__len__ = dataset.__len__,
-		__iter__ = lambda _: itertools.chain.from_iterable(sampler(batch_size, dataset, **kwargs))
-	))()
+for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
+	set_random_seed(opts.SEED)
 
 def recall(embeddings, labels, K = 1):
 	prod = torch.mm(embeddings, embeddings.t())
 	norm = prod.diag().unsqueeze(1).expand_as(prod)
 	D = norm + norm.t() - 2 * prod
-
 	knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
 	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
-
-for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
-	set_random_seed(opts.SEED)
-
-base_model = opts.BASE_MODEL()
-base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
-base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
-model = opts.MODEL(base_model)
 
 normalize = transforms.Compose([
 	transforms.ToTensor(),
@@ -72,10 +60,15 @@ dataset_eval = opts.DATASET(opts.DATA_DIR, train = False, transform = transforms
 	normalize
 ]), download = True)
 
+adapt_sampler = lambda batch_size, dataset, sampler, **kwargs: type('', (), dict(__len__ = dataset.__len__, __iter__ = lambda _: itertools.chain.from_iterable(sampler(batch_size, dataset, **kwargs))))()
 loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE, drop_last = True)
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
 
-model.cuda()
+base_model = opts.BASE_MODEL()
+base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
+base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
+model = opts.MODEL(base_model).cuda()
+
 weights, biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias] for is_bias in [False, True]]
 optimizer = model.optim_algo([dict(params = weights), dict(params = biases, weight_decay = 0.0)], **model.optim_params)
 
