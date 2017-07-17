@@ -93,8 +93,8 @@ class Pddm(Model):
 		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
 		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
 
-		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
-		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
+		E_m = F.relu(Alpha + s[i, k] - s[i, j]) + F.relu(Alpha + s[j, l] - s[i, j])
+		E_e = F.relu(Beta + d[i, j] - d[i, k]) + F.relu(Beta + d[i, j] - d[j, l])
 
 		return E_m + Lambda * E_e
 	
