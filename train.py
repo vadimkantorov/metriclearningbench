@@ -96,4 +96,4 @@ for epoch in range(opts.NUM_EPOCHS):
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
 		print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-	log.write('recall@1 epoch {}: {}\n'.format(epoch, recall(torch.cat(embeddings_all, 0), torch.cat(labels_all, 0))))
+	log.write('recall@1 epoch {}: {}\n'.format(epoch, recall(torch.cat(embeddings_all), torch.cat(labels_all))))
