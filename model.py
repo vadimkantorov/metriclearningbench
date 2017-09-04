@@ -25,7 +25,7 @@ def pdist(A, squared = False, eps = 1e-4):
 	prod = torch.mm(A, A.t())
 	norm = prod.diag().unsqueeze(1).expand_as(prod)
 	res = (norm + norm.t() - 2 * prod).clamp(min = 0)
-	return res if squared else (res + eps).sqrt() + eps 
+	return res if squared else res.clamp(min = eps).sqrt() + eps 
 		
 class Untrained(Model):
 	def forward(self, input):
