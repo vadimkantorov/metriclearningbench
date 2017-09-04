@@ -36,7 +36,7 @@ class LiftedStruct(Model):
 		d = pdist(features, squared = False, eps = eps)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
 		neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
-		return torch.sum(torch.mul(pos.triu(1), torch.log(neg_i + neg_i.t()) + d).clamp(min = 0).pow(2)) / (pos.sum() - len(d))
+		return torch.sum(F.relu(pos.triu(1) * ((neg_i + neg_i.t()).log() + d)).pow(2)) / (pos.sum() - len(d))
 
 class Triplet(Model):
 	def criterion(self, features, labels, margin = 1.0):
@@ -44,7 +44,7 @@ class Triplet(Model):
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
 		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
-		return (M * torch.clamp(T - T.transpose(1, 2) + margin, min = 0)).sum() / M.sum()
+		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
 	
 	optim_params = dict(lr = 2e-5, momentum = 0.9, weight_decay = 5e-4)
 
@@ -52,9 +52,9 @@ class TripletRatio(Model):
 	def criterion(self, features, labels, margin = 0.1, eps = 1e-4):
 		d = pdist(features, squared = False, eps = eps)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
-		T = d.unsqueeze(1).expand(*(len(d),) * 3) # [i][k][j]
+		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
-		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum() #[i][k][j] = 
+		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum()
 
 class Npairs(Model):
 	pass
@@ -63,14 +63,13 @@ class Pddm(Model):
 	def __init__(self, base_model):
 		nn.Module.__init__(self)
 		self.base_model = base_model
-		#self.base_model.drop5.p = 0
-
 		d = base_model.output_size
+		
 		self.wu = nn.Linear(d, d)
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
-		self.dropout = nn.Dropout(p = 0.9)
+		self.dropout = nn.Dropout(p = 0.5)
 	
 	def forward(self, input):
 		return F.normalize(self.base_model(input).view(input.size(0), -1))
@@ -85,8 +84,8 @@ class Pddm(Model):
 		u_ = F.normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
 		v_ = F.normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
+		
 		sneg = s * (1 - pos)
-				
 		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
 		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
 		assert pos[i, j] == 1 and pos[i, k] == 0 and pos[j, l] == 0
@@ -94,8 +93,8 @@ class Pddm(Model):
 		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
 		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
 
-		E_m = torch.clamp(Alpha + s[i, k] - s[i, j], min = 0) + torch.clamp(Alpha + s[j, l] - s[i, j], min = 0)
-		E_e = torch.clamp(Beta + d[i, j] - d[i, k], min = 0) + torch.clamp(Beta + d[i, j] - d[j, l], min = 0)
+		E_m = F.relu(Alpha + s[i, k] - s[i, j]) + F.relu(Alpha + s[j, l] - s[i, j])
+		E_e = F.relu(Beta + d[i, j] - d[i, k]) + F.relu(Beta + d[i, j] - d[j, l])
 
 		return E_m + Lambda * E_e
 	
