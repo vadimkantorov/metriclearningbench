@@ -1,3 +1,4 @@
+import math
 import random
 import itertools
 
@@ -10,7 +11,7 @@ def sample_from_class(images_by_class, class_label_ind):
 def simple(batch_size, dataset, prob_other = 0.5):
 	'''lazy sampling, not like in lifted_struct. they add to the pool all postiive combinations, then compute the average number of positive pairs per image, then sample for every image the same number of negative pairs'''
 	images_by_class = index_dataset(dataset)
-	while True:
+	for batch_idx in xrange(int(math.ceil(len(dataset) * 1.0 / batch_size))):
 		example_indices = []
 		for i in range(0, batch_size, 2):
 			perm = random.sample(images_by_class.keys(), 2)
@@ -19,7 +20,7 @@ def simple(batch_size, dataset, prob_other = 0.5):
 
 def triplet(batch_size, dataset):
 	images_by_class = index_dataset(dataset)
-	while True:
+	for batch_idx in xrange(int(math.ceil(len(dataset) * 1.0 / batch_size))):
 		example_indices = []
 		for i in range(0, batch_size, 3):
 			perm = random.sample(images_by_class.keys(), 2)

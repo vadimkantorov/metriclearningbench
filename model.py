@@ -12,14 +12,10 @@ class Model(nn.Module):
 	def forward(self, input):
 		return self.embedder(self.base_model(input).view(input.size(0), -1))
 	
-	def adjust_learning_rate(self, epoch, optimizer):
-		if epoch > self.optim_params_annealed['epoch']:
-			for param_group in optimizer.param_groups:
-				param_group.update(self.optim_params_annealed)
-	
+	criterion = None
 	optim_algo = optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
-	optim_params_annealed = dict(epoch = float('nan'))
+	optim_params_annealed = dict(epoch = float('inf'), gamma = 0.1)
 
 def pdist(A, squared = False, eps = 1e-4):
 	prod = torch.mm(A, A.t())
@@ -29,35 +25,33 @@ def pdist(A, squared = False, eps = 1e-4):
 		
 class Untrained(Model):
 	def forward(self, input):
-		return self.base_model(input).view(input.size(0), -1)
+		return self.base_model(input).view(input.size(0), -1).detach()
 
 class LiftedStruct(Model):
-	def criterion(self, features, labels, margin = 1.0, eps = 1e-4):
-		d = pdist(features, squared = False, eps = eps)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
+	def criterion(self, embeddings, labels, margin = 1.0, eps = 1e-4):
+		d = pdist(embeddings, squared = False, eps = eps)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
 		neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
 		return torch.sum(F.relu(pos.triu(1) * ((neg_i + neg_i.t()).log() + d)).pow(2)) / (pos.sum() - len(d))
 
 class Triplet(Model):
-	def criterion(self, features, labels, margin = 1.0):
-		d = pdist(features, squared = False)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
+	def criterion(self, embeddings, labels, margin = 1.0):
+		d = pdist(embeddings, squared = False)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings) - torch.autograd.Variable(torch.eye(len(d))).type_as(embeddings)
 		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
 	
-	optim_params = dict(lr = 2e-5, momentum = 0.9, weight_decay = 5e-4)
+	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
+	optim_params_annealed = dict(epoch = 20, gamma = 0.1)
 
 class TripletRatio(Model):
-	def criterion(self, features, labels, margin = 0.1, eps = 1e-4):
-		d = pdist(features, squared = False, eps = eps)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
+	def criterion(self, embeddings, labels, margin = 0.1, eps = 1e-4):
+		d = pdist(embeddings, squared = False, eps = eps)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
 		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum()
-
-class Npairs(Model):
-	pass
 
 class Pddm(Model):
 	def __init__(self, base_model):
@@ -74,11 +68,11 @@ class Pddm(Model):
 	def forward(self, input):
 		return F.normalize(self.base_model(input).view(input.size(0), -1))
 
-	def criterion(self, features, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
-		d = pdist(features, squared = True)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(features)
+	def criterion(self, embeddings, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
+		d = pdist(embeddings, squared = True)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
 
-		f1, f2 = [features.detach().unsqueeze(dim).expand(len(features), *features.size()) for dim in [0, 1]]
+		f1, f2 = [embeddings.detach().unsqueeze(dim).expand(len(embeddings), *embeddings.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
 		v = (f1 + f2) / 2
 		u_ = F.normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))

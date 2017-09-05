@@ -7,7 +7,7 @@ import hickle
 import torch
 import torch.utils.data
 import torchvision.transforms as transforms
-from torch.autograd import Variable
+import torch.optim.lr_scheduler
 
 import cub2011
 import cars196
@@ -22,13 +22,14 @@ parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--DATASET', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
 parser.add_argument('--BASE_MODEL', choices = dict(GOOGLENET = googlenet.GoogLeNet), default = googlenet.GoogLeNet, action = LookupChoices)
-parser.add_argument('--MODEL', choices = dict(LIFTED_STRUCT = model.LiftedStruct, TRIPLET = model.Triplet, TRIPLET_RATIO = model.TripletRatio, PDDM = model.Pddm, UNTRAINED = model.Untrained), default = model.LiftedStruct, action = LookupChoices)
+parser.add_argument('--MODEL', choices = dict(LIFTED_STRUCT = model.LiftedStruct, TRIPLET = model.Triplet, TRIPLET_RATIO = model.TripletRatio, PDDM = model.Pddm, UNTRAINED = model.Untrained), default = model.Triplet, action = LookupChoices)
+parser.add_argument('--SAMPLER', choices = dict(SIMPLE = sampler.simple, TRIPLET = sampler.triplet), default = sampler.simple, action = LookupChoices)
 parser.add_argument('--DATA_DIR', default = 'data')
 parser.add_argument('--BASE_MODEL_WEIGHTS', default = 'data/googlenet.h5')
 parser.add_argument('--LOG', default = 'data/log.txt')
 parser.add_argument('--SEED', default = 1, type = int)
 parser.add_argument('--NUM_THREADS', default = 16, type = int)
-parser.add_argument('--NUM_EPOCHS', default = 200, type = int)
+parser.add_argument('--NUM_EPOCHS', default = 100, type = int)
 parser.add_argument('--BATCH_SIZE', default = 64, type = int)
 opts = parser.parse_args()
 
@@ -41,6 +42,11 @@ def recall(embeddings, labels, K = 1):
 	D = norm + norm.t() - 2 * prod
 	knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
 	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
+
+base_model = opts.BASE_MODEL()
+base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
+base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
+model = opts.MODEL(base_model).cuda()
 
 normalize = transforms.Compose([
 	transforms.ToTensor(),
@@ -61,24 +67,20 @@ dataset_eval = opts.DATASET(opts.DATA_DIR, train = False, transform = transforms
 ]), download = True)
 
 adapt_sampler = lambda batch_size, dataset, sampler, **kwargs: type('', (), dict(__len__ = dataset.__len__, __iter__ = lambda _: itertools.chain.from_iterable(sampler(batch_size, dataset, **kwargs))))()
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, sampler.simple), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE, drop_last = True)
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.BATCH_SIZE, dataset_train, opts.SAMPLER), num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE, drop_last = True)
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.NUM_THREADS, batch_size = opts.BATCH_SIZE)
-
-base_model = opts.BASE_MODEL()
-base_model_weights = hickle.load(opts.BASE_MODEL_WEIGHTS)
-base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
-model = opts.MODEL(base_model).cuda()
 
 weights, biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias] for is_bias in [False, True]]
 optimizer = model.optim_algo([dict(params = weights), dict(params = biases, weight_decay = 0.0)], **model.optim_params)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = model.optim_params_annealed['epoch'], gamma = model.optim_params_annealed['gamma'])
 
 log = open(opts.LOG, 'w', 0)
 for epoch in range(opts.NUM_EPOCHS):
-	model.adjust_learning_rate(epoch, optimizer)
+	scheduler.step()
 	model.train()
 	loss_all = []
-	for batch_idx, batch in enumerate(loader_train):
-		images, labels = [Variable(tensor.cuda()) for tensor in batch]
+	for batch_idx, batch in enumerate(loader_train if model.criterion is not None else []):
+		images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
 		loss_all.append(loss.data[0])
 		
@@ -86,12 +88,12 @@ for epoch in range(opts.NUM_EPOCHS):
 		loss.backward()
 		optimizer.step()
 		print('train {:>3}.{:05}  loss  {:.06}'.format(epoch, batch_idx, loss.data[0]))
-	log.write('loss epoch {}: {}\n'.format(epoch, torch.Tensor(loss_all).mean()))
+	log.write('loss epoch {}: {}\n'.format(epoch, torch.Tensor(loss_all or [0.0]).mean()))
 	
 	model.eval()
 	embeddings_all, labels_all = [], []
 	for batch_idx, batch in enumerate(loader_eval):
-		images, labels = [Variable(tensor.cuda(), volatile = True) for tensor in batch]
+		images, labels = [torch.autograd.Variable(tensor.cuda(), volatile = True) for tensor in batch]
 		output = model(images)
 		embeddings_all.append(output.data.cpu())
 		labels_all.append(labels.data.cpu())
