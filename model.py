@@ -43,7 +43,7 @@ class Triplet(Model):
 		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	optim_params_annealed = dict(epoch = 20, gamma = 0.1)
+	optim_params_annealed = dict(epoch = 30, gamma = 0.5)
 
 class TripletRatio(Model):
 	def criterion(self, embeddings, labels, margin = 0.1, eps = 1e-4):
@@ -70,7 +70,7 @@ class Pddm(Model):
 
 	def criterion(self, embeddings, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
 		d = pdist(embeddings, squared = True)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings) - torch.autograd.Variable(torch.eye(len(d))).type_as(embeddings)
 
 		f1, f2 = [embeddings.detach().unsqueeze(dim).expand(len(embeddings), *embeddings.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
@@ -80,9 +80,9 @@ class Pddm(Model):
 		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
 		
 		sneg = s * (1 - pos)
-		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero() if i != j])[1]
-		k, l = sneg.max(1)[1].data.squeeze(1)[torch.cuda.LongTensor([i, j])]
-		assert pos[i, j] == 1 and pos[i, k] == 0 and pos[j, l] == 0
+		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
+		k, l = sneg.data.max(1)[1][torch.cuda.LongTensor([i, j])]
+		assert pos.data[i, j] == 1 and pos.data[i, k] == 0 and pos.data[j, l] == 0
 
 		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
 		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
