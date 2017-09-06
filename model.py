@@ -63,7 +63,6 @@ class Pddm(Model):
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
-		self.dropout = nn.Dropout(p = 0.5)
 	
 	def forward(self, input):
 		return F.normalize(self.base_model(input).view(input.size(0), -1))
@@ -75,21 +74,19 @@ class Pddm(Model):
 		f1, f2 = [embeddings.detach().unsqueeze(dim).expand(len(embeddings), *embeddings.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
 		v = (f1 + f2) / 2
-		u_ = F.normalize(F.relu(self.dropout(self.wu(u.view(-1, u.size(-1))))))
-		v_ = F.normalize(F.relu(self.dropout(self.wv(v.view(-1, v.size(-1))))))
-		s = self.ws(F.relu(self.dropout(self.wc(torch.cat((u_, v_), -1))))).view_as(d)
+		u_ = F.normalize(F.relu(F.dropout(self.wu(u.view(-1, u.size(-1))), training = self.training)))
+		v_ = F.normalize(F.relu(F.dropout(self.wv(v.view(-1, v.size(-1))), training = self.training)))
+		s = self.ws(F.relu(F.dropout(self.wc(torch.cat((u_, v_), -1)), training = self.training))).view_as(d)
 		
 		sneg = s * (1 - pos)
 		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
 		k, l = sneg.data.max(1)[1][torch.cuda.LongTensor([i, j])]
 		assert pos.data[i, j] == 1 and pos.data[i, k] == 0 and pos.data[j, l] == 0
 
-		smin, smax = torch.min(sneg[i], sneg[j]).min().detach(), torch.max(sneg[i], sneg[j]).max().detach()
-		s = (s - smin.expand_as(s)) / (smax - smin).expand_as(s)
-
 		E_m = F.relu(Alpha + s[i, k] - s[i, j]) + F.relu(Alpha + s[j, l] - s[i, j])
 		E_e = F.relu(Beta + d[i, j] - d[i, k]) + F.relu(Beta + d[i, j] - d[j, l])
 
+		#return E_e
 		return E_m + Lambda * E_e
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
