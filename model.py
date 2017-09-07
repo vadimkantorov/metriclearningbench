@@ -10,7 +10,7 @@ class Model(nn.Module):
 		self.embedder = nn.Linear(base_model.output_size, embedding_size)
 
 	def forward(self, input):
-		return self.embedder(self.base_model(input).view(input.size(0), -1))
+		return self.embedder(self.base_model(input).view(len(input), -1))
 	
 	criterion = None
 	optim_algo = optim.SGD
@@ -53,25 +53,35 @@ class TripletRatio(Model):
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum()
 
+def topk_mask(input, dim, K = 10):
+	index = input.topk(max(1, min(K, input.size(dim))), dim = dim)[1]
+	mask = zeros_like(input).scatter(dim, index, 1.0)
+	return mask
+
+def zeros_like(input):
+	return torch.autograd.Variable(torch.zeros_like(input.data))
+
 class Pddm(Model):
-	def __init__(self, base_model):
+	def __init__(self, base_model, d = 1024):
 		nn.Module.__init__(self)
 		self.base_model = base_model
-		d = base_model.output_size
-		
+		#self.embedder = nn.Linear(base_model.output_size, d)
+		self.embedder = lambda x: x #nn.Linear(base_model.output_size, d)
 		self.wu = nn.Linear(d, d)
 		self.wv = nn.Linear(d, d)
 		self.wc = nn.Linear(2 * d, d)
 		self.ws = nn.Linear(d, 1)
 	
 	def forward(self, input):
-		return F.normalize(self.base_model(input).view(input.size(0), -1))
+		#return F.normalize(self.base_model(input).view(len(input), -1))
+		return F.normalize(self.embedder(self.base_model(input).view(len(input), -1)))
 
 	def criterion(self, embeddings, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
+		#embeddings = embeddings * topk_mask(embeddings, dim = 1, K = 512)
 		d = pdist(embeddings, squared = True)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings) - torch.autograd.Variable(torch.eye(len(d))).type_as(embeddings)
 
-		f1, f2 = [embeddings.detach().unsqueeze(dim).expand(len(embeddings), *embeddings.size()) for dim in [0, 1]]
+		f1, f2 = [embeddings.unsqueeze(dim).expand(len(embeddings), *embeddings.size()) for dim in [0, 1]]
 		u = (f1 - f2).abs()
 		v = (f1 + f2) / 2
 		u_ = F.normalize(F.relu(F.dropout(self.wu(u.view(-1, u.size(-1))), training = self.training)))
@@ -80,14 +90,12 @@ class Pddm(Model):
 		
 		sneg = s * (1 - pos)
 		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
-		k, l = sneg.data.max(1)[1][torch.cuda.LongTensor([i, j])]
-		assert pos.data[i, j] == 1 and pos.data[i, k] == 0 and pos.data[j, l] == 0
+		k, l = sneg.data.max(1, keepdim = True)[1][[i, j], ...].squeeze(1)
 
-		E_m = F.relu(Alpha + s[i, k] - s[i, j]) + F.relu(Alpha + s[j, l] - s[i, j])
+		E_m = F.relu(Alpha - s[i, j] + s[i, k]) + F.relu(Alpha - s[i, j] + s[j, l])
 		E_e = F.relu(Beta + d[i, j] - d[i, k]) + F.relu(Beta + d[i, j] - d[j, l])
 
-		#return E_e
 		return E_m + Lambda * E_e
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	#optim_params_annealed = dict(lr = 1e-5, epoch = 5)
+	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
