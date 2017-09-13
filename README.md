@@ -1,8 +1,7 @@
 # [WIP] Metric learning [models](./model.py) in PyTorch
 1. [Lifted structured embedding](https://arxiv.org/abs/1511.06452)
 2. [Triplet loss](https://arxiv.org/abs/1503.03832)
-3. [Triplet ratio loss](https://arxiv.org/abs/1502.05908)
-4. [PDDM](https://arxiv.org/abs/1610.08904) [WIP]
+3. [Margin contrastive loss](https://arxiv.org/abs/1706.07567)
 
 # Datasets supported
 1. [CUB2011](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html)
@@ -11,16 +10,9 @@
 
 # Examples
 ```shell
-# train lifted structured embedding on CUB2011
-python train.py --MODEL=LIFTED_STRUCT --BASE_MODEL=GOOGLENET --DATASET=CUB2011
+# download GoogLeNet weights
+wget -P ./data https://github.com/vadimkantorov/metriclearningbench/releases/download/data/googlenet.h5
 
-# train triplet loss embedding on CUB2011
-python train.py --MODEL=TRIPLET --BASE_MODEL=GOOGLENET --DATASET=CUB2011
+# train margin contrastive loss on CUB2011
+python train.py --model MARGIN --dataset CUB2011 --base_model GOOGLENET
 ```
-
-# CUB2011 results
-| model | R1 @ epoch0 | R1 @ epoch10 | R1 @ epoch30 |
-| --- | --- | --- | --- |
-| LIFTED_STRUCT | | | |
-| TRIPLET | | | | |
-| UNTRAINED | | | |
