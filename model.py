@@ -2,6 +2,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+def topk_mask(input, dim, K = 10):
+	index = input.topk(max(1, min(K, input.size(dim))), dim = dim)[1]
+	mask = zeros_like(input).scatter(dim, index, 1.0)
+	return mask
+
+def zeros_like(input):
+	return torch.autograd.Variable(torch.zeros_like(input.data))
+
+def pdist(A, squared = False, eps = 1e-4):
+	prod = torch.mm(A, A.t())
+	norm = prod.diag().unsqueeze(1).expand_as(prod)
+	res = (norm + norm.t() - 2 * prod).clamp(min = 0)
+	return res if squared else res.clamp(min = eps).sqrt() + eps 
 	
 class Model(nn.Module):
 	def __init__(self, base_model, embedding_size = 128):
@@ -17,12 +31,6 @@ class Model(nn.Module):
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
 	optim_params_annealed = dict(epoch = float('inf'), gamma = 0.1)
 
-def pdist(A, squared = False, eps = 1e-4):
-	prod = torch.mm(A, A.t())
-	norm = prod.diag().unsqueeze(1).expand_as(prod)
-	res = (norm + norm.t() - 2 * prod).clamp(min = 0)
-	return res if squared else res.clamp(min = eps).sqrt() + eps 
-		
 class Untrained(Model):
 	def forward(self, input):
 		return self.base_model(input).view(input.size(0), -1).detach()
@@ -30,14 +38,14 @@ class Untrained(Model):
 class LiftedStruct(Model):
 	def criterion(self, embeddings, labels, margin = 1.0, eps = 1e-4):
 		d = pdist(embeddings, squared = False, eps = eps)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d)
 		neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
 		return torch.sum(F.relu(pos.triu(1) * ((neg_i + neg_i.t()).log() + d)).pow(2)) / (pos.sum() - len(d))
 
 class Triplet(Model):
 	def criterion(self, embeddings, labels, margin = 1.0):
-		d = pdist(embeddings, squared = False)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings) - torch.autograd.Variable(torch.eye(len(d))).type_as(embeddings)
+		d = pdist(embeddings)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
 		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
@@ -48,18 +56,10 @@ class Triplet(Model):
 class TripletRatio(Model):
 	def criterion(self, embeddings, labels, margin = 0.1, eps = 1e-4):
 		d = pdist(embeddings, squared = False, eps = eps)
-		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(embeddings)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d)
 		T = d.unsqueeze(1).expand(*(len(d),) * 3)
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum()
-
-def topk_mask(input, dim, K = 10):
-	index = input.topk(max(1, min(K, input.size(dim))), dim = dim)[1]
-	mask = zeros_like(input).scatter(dim, index, 1.0)
-	return mask
-
-def zeros_like(input):
-	return torch.autograd.Variable(torch.zeros_like(input.data))
 
 class Pddm(Model):
 	def __init__(self, base_model, d = 1024):
@@ -99,3 +99,22 @@ class Pddm(Model):
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
 	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
+
+class Margin(Model):
+	def __init__(self, base_model):
+		Model.__init__(self, base_model)
+		self.beta_bias = nn.Parameter(torch.Tensor([1.2]))
+		
+	def forward(self, input):
+		return F.normalize(Model.forward(self, input))
+
+	def criterion(self, embeddings, labels, alpha = 0.1, beta = 1.2):
+		d = pdist(embeddings)
+		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
+		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < 0.5), 0.0)
+		neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
+		M = (pos + neg > 0).float()
+		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias))).sum() / M.sum()
+
+	optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4)
+	optim_params_annealed = dict(epoch = 30, gamma = 0.1)
