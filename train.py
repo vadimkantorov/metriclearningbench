@@ -44,9 +44,7 @@ def recall(embeddings, labels, K = 1):
 	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
 
 base_model = opts.base_model()
-base_model_weights = hickle.load(opts.base_model_weights)
-base_model.load_state_dict({k : torch.from_numpy(v) for k, v in base_model_weights.items()})
-model = opts.model(base_model).cuda()
+base_model.load_state_dict({k : torch.from_numpy(v) for k, v in hickle.load(opts.base_model_weights).items()})
 
 normalize = transforms.Compose([
 	transforms.ToTensor(),
@@ -70,6 +68,7 @@ adapt_sampler = lambda batch_size, dataset, sampler, **kwargs: type('', (), dict
 loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.batch_size, dataset_train, opts.sampler), num_workers = opts.threads, batch_size = opts.batch_size, drop_last = True)
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch_size)
 
+model = opts.model(base_model, dataset_train.num_training_classes).cuda()
 weights, biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias] for is_bias in [False, True]]
 optimizer = model.optim_algo([dict(params = weights), dict(params = biases, weight_decay = 0.0)], **model.optim_params)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = model.optim_params_annealed['epoch'], gamma = model.optim_params_annealed['gamma'])

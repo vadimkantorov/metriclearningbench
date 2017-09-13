@@ -33,10 +33,10 @@ class CUB2011(ImageFolder, CIFAR10):
 			transform=transform, target_transform=target_transform, **kwargs)
 
 class CUB2011MetricLearning(CUB2011):
-	train_classes = 100
+	num_training_classes = 100
 
 	def __init__(self, root, train=False, transform=None, target_transform=None, download=False, **kwargs):
 		CUB2011.__init__(self, root, transform=transform, target_transform=target_transform, download=download, **kwargs)
-		self.classes = self.classes[:self.train_classes] if train else self.classes[self.train_classes:]
+		self.classes = self.classes[:self.num_training_classes] if train else self.classes[self.num_training_classes:]
 		self.class_to_idx = {class_label : class_label_ind for class_label, class_label_ind in self.class_to_idx.items() if class_label in self.classes}
 		self.imgs = [(image_file_path, class_label_ind) for image_file_path, class_label_ind in self.imgs if class_label_ind in self.class_to_idx.values()]

@@ -18,7 +18,7 @@ def pdist(A, squared = False, eps = 1e-4):
 	return res if squared else res.clamp(min = eps).sqrt() + eps 
 	
 class Model(nn.Module):
-	def __init__(self, base_model, embedding_size = 128):
+	def __init__(self, base_model, num_classes, embedding_size = 128):
 		super(Model, self).__init__()
 		self.base_model = base_model
 		self.embedder = nn.Linear(base_model.output_size, embedding_size)
@@ -62,7 +62,7 @@ class TripletRatio(Model):
 		return (M * T.div(T.transpose(1, 2) + margin)).sum() / M.sum()
 
 class Pddm(Model):
-	def __init__(self, base_model, d = 1024):
+	def __init__(self, base_model, num_classes, d = 1024):
 		nn.Module.__init__(self)
 		self.base_model = base_model
 		#self.embedder = nn.Linear(base_model.output_size, d)
@@ -101,20 +101,20 @@ class Pddm(Model):
 	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
 
 class Margin(Model):
-	def __init__(self, base_model):
-		Model.__init__(self, base_model)
-		self.beta_bias = nn.Parameter(torch.Tensor([1.2]))
+	def __init__(self, base_model, num_classes, beta = 1.2):
+		Model.__init__(self, base_model, num_classes)
+		self.beta_bias = nn.Parameter(torch.Tensor([beta] * num_classes))
 		
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.1, beta = 1.2):
+	def criterion(self, embeddings, labels, alpha = 0.1):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
 		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < 0.5), 0.0)
 		neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
 		M = (pos + neg > 0).float()
-		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias))).sum() / M.sum()
+		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias[labels].unsqueeze(1).expand_as(d)))).sum() / M.sum()
 
 	optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4)
 	optim_params_annealed = dict(epoch = 30, gamma = 0.1)
