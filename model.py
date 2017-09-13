@@ -108,7 +108,7 @@ class Margin(Model):
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.1):
+	def criterion(self, embeddings, labels, alpha = 0.2):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
 		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < 0.5), 0.0)
