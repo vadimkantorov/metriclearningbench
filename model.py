@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 
 def topk_mask(input, dim, K = 10):
 	index = input.topk(max(1, min(K, input.size(dim))), dim = dim)[1]
@@ -27,7 +26,7 @@ class Model(nn.Module):
 		return self.embedder(self.base_model(input).view(len(input), -1))
 	
 	criterion = None
-	optim_algo = optim.SGD
+	optim_algo = torch.optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
 	optim_params_annealed = dict(epoch = float('inf'), gamma = 0.1)
 
@@ -101,20 +100,25 @@ class Pddm(Model):
 	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
 
 class Margin(Model):
-	def __init__(self, base_model, num_classes, beta = 1.2):
+	def __init__(self, base_model, num_classes, beta = 1.2, gamma = 1.0):
 		Model.__init__(self, base_model, num_classes)
-		self.beta_bias = nn.Parameter(torch.Tensor([beta] * num_classes))
+		self.beta_bias = nn.Parameter(torch.Tensor([beta]))
+		self.gamma_bias = nn.Parameter(torch.Tensor([gamma]))
 		
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.1):
+	def criterion(self, embeddings, labels, alpha = 0.2, distance_threshold = 1.0):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
-		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < 0.5), 0.0)
+		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < distance_threshold), 0.0)
 		neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
 		M = (pos + neg > 0).float()
-		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias[labels].unsqueeze(1).expand_as(d)))).sum() / M.sum()
+	#	print('beta', self.beta_bias.data[0])
+	#	print('gamma', self.gamma_bias.data[0])
+		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias.data[0]))).sum() / M.sum()
 
+	#optim_algo = torch.optim.Adam
+	#optim_params = dict(lr = 1e-4, weight_decay = 5e-4)
 	optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4)
-	optim_params_annealed = dict(epoch = 30, gamma = 0.1)
+	#optim_params_annealed = dict(epoch = 10, gamma = 0.5)
