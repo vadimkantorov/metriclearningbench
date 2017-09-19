@@ -22,14 +22,14 @@ parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--dataset', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
 parser.add_argument('--base_model', choices = dict(GOOGLENET = googlenet.GoogLeNet), default = googlenet.GoogLeNet, action = LookupChoices)
-parser.add_argument('--model', choices = dict(LIFTED_STRUCT = model.LiftedStruct, TRIPLET = model.Triplet, TRIPLET_RATIO = model.TripletRatio, PDDM = model.Pddm, UNTRAINED = model.Untrained, MARGIN = model.Margin), default = model.Triplet, action = LookupChoices)
+parser.add_argument('--model', choices = dict(LIFTED_STRUCT = model.LiftedStruct, TRIPLET = model.Triplet, TRIPLET_RATIO = model.TripletRatio, PDDM = model.Pddm, UNTRAINED = model.Untrained, MARGIN = model.Margin), default = model.Margin, action = LookupChoices)
 parser.add_argument('--sampler', choices = dict(SIMPLE = sampler.simple, TRIPLET = sampler.triplet, NPAIRS = sampler.npairs), default = sampler.npairs, action = LookupChoices)
 parser.add_argument('--data_dir', default = 'data')
 parser.add_argument('--base_model_weights', default = 'data/googlenet.h5')
 parser.add_argument('--log', default = 'data/log.txt')
 parser.add_argument('--seed', default = 1, type = int)
 parser.add_argument('--threads', default = 16, type = int)
-parser.add_argument('--epochs', default = 200, type = int)
+parser.add_argument('--epochs', default = 800, type = int)
 parser.add_argument('--batch_size', default = 128, type = int)
 opts = parser.parse_args()
 
@@ -69,8 +69,10 @@ loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sample
 loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch_size)
 
 model = opts.model(base_model, dataset_train.num_training_classes).cuda()
-weights, biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias] for is_bias in [False, True]]
-optimizer = model.optim_algo([dict(params = weights), dict(params = biases, weight_decay = 0.0)], **model.optim_params)
+model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias and ('base_model' in k) == is_base_model] for is_base_model in [False, True] for is_bias in [False, True]]
+
+base_model_lr_mult = model.optim_params.pop('base_model_lr_mult', 1.0)
+optimizer = model.optim_algo([dict(params = base_model_weights, lr = base_model_lr_mult * model.optim_params['lr']), dict(params = base_model_biases, lr = base_model_lr_mult * model.optim_params['lr'], weight_decay = 0.0), dict(params = model_biases, weight_decay = 0.0)], **model.optim_params)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = model.optim_params_annealed['epoch'], gamma = model.optim_params_annealed['gamma'])
 
 log = open(opts.log, 'w', 0)
@@ -89,12 +91,13 @@ for epoch in range(opts.epochs):
 		print('train {:>3}.{:05}  loss  {:.06f}'.format(epoch, batch_idx, loss_all[-1]))
 	log.write('loss epoch {}: {}\n'.format(epoch, torch.Tensor(loss_all or [0.0]).mean()))
 	
-	model.eval()
-	embeddings_all, labels_all = [], []
-	for batch_idx, batch in enumerate(loader_eval):
-		images, labels = [torch.autograd.Variable(tensor.cuda(), volatile = True) for tensor in batch]
-		output = model(images)
-		embeddings_all.append(output.data.cpu())
-		labels_all.append(labels.data.cpu())
-		print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-	log.write('recall@1 epoch {}: {}\n'.format(epoch, recall(torch.cat(embeddings_all), torch.cat(labels_all))))
+	if epoch < 10 or epoch % 5 == 0:
+		model.eval()
+		embeddings_all, labels_all = [], []
+		for batch_idx, batch in enumerate(loader_eval):
+			images, labels = [torch.autograd.Variable(tensor.cuda(), volatile = True) for tensor in batch]
+			output = model(images)
+			embeddings_all.append(output.data.cpu())
+			labels_all.append(labels.data.cpu())
+			print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
+		log.write('recall@1 epoch {}: {}\n'.format(epoch, recall(torch.cat(embeddings_all), torch.cat(labels_all))))

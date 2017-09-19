@@ -2,19 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def topk_mask(input, dim, K = 10):
-	index = input.topk(max(1, min(K, input.size(dim))), dim = dim)[1]
-	mask = zeros_like(input).scatter(dim, index, 1.0)
-	return mask
-
-def zeros_like(input):
-	return torch.autograd.Variable(torch.zeros_like(input.data))
+def topk_mask(input, dim, K = 10, **kwargs):
+	index = input.topk(max(1, min(K, input.size(dim))), dim = dim, **kwargs)[1]
+	return torch.autograd.Variable(torch.zeros_like(input.data)).scatter(dim, index, 1.0)
 
 def pdist(A, squared = False, eps = 1e-4):
 	prod = torch.mm(A, A.t())
 	norm = prod.diag().unsqueeze(1).expand_as(prod)
 	res = (norm + norm.t() - 2 * prod).clamp(min = 0)
-	return res if squared else res.clamp(min = eps).sqrt() + eps 
+	return res if squared else res.clamp(min = eps).sqrt()
 	
 class Model(nn.Module):
 	def __init__(self, base_model, num_classes, embedding_size = 128):
@@ -100,25 +96,21 @@ class Pddm(Model):
 	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
 
 class Margin(Model):
-	def __init__(self, base_model, num_classes, beta = 1.2, gamma = 1.0):
-		Model.__init__(self, base_model, num_classes)
-		self.beta_bias = nn.Parameter(torch.Tensor([beta]))
-		self.gamma_bias = nn.Parameter(torch.Tensor([gamma]))
-		
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.2, distance_threshold = 1.0):
+	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
-		prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < distance_threshold), 0.0)
-		neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
-		M = (pos + neg > 0).float()
-	#	print('beta', self.beta_bias.data[0])
-	#	print('gamma', self.gamma_bias.data[0])
-		return (M * F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias.data[0]))).sum() / M.sum()
+		#prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < distance_threshold), 0.0)
+		#neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
 
-	#optim_algo = torch.optim.Adam
-	#optim_params = dict(lr = 1e-4, weight_decay = 5e-4)
-	optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4)
+		neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, K = int(pos.sum().data[0] / len(pos)), largest = False)
+		M = (pos + neg > 0).float()
+		L = M * F.relu(alpha + (pos * 2 - 1) * (d - beta))
+		return L.sum() / L.gt(0).float().sum()
+
+	optim_algo = torch.optim.Adam
+	optim_params = dict(lr = 1e-3, weight_decay = 1e-4, base_model_lr_mult = 1e-2)
+	#optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4, base_model_lr_mult = 1)
 	#optim_params_annealed = dict(epoch = 10, gamma = 0.5)
