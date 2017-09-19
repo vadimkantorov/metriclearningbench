@@ -102,13 +102,10 @@ class Margin(Model):
 	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
-		#prob = (pos.sum(1) / (len(pos) - pos.sum(1))).unsqueeze(1).expand_as(pos).masked_fill_((pos > 0) + (d < distance_threshold), 0.0)
-		#neg = torch.autograd.Variable(torch.bernoulli(prob.data)).type_as(d)
-
 		neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, K = int(pos.sum().data[0] / len(pos)), largest = False)
-		M = (pos + neg > 0).float()
-		L = M * F.relu(alpha + (pos * 2 - 1) * (d - beta))
-		return L.sum() / L.gt(0).float().sum()
+		L = F.relu(alpha + (pos * 2 - 1) * (d - beta))
+		M = ((pos + neg > 0) * (L > 0)).float()
+		return (M * L).sum() / M.sum()
 
 	optim_algo = torch.optim.Adam
 	optim_params = dict(lr = 1e-3, weight_decay = 1e-4, base_model_lr_mult = 1e-2)
