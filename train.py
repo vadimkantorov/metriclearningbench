@@ -29,7 +29,7 @@ parser.add_argument('--base_model_weights', default = 'data/googlenet.h5')
 parser.add_argument('--log', default = 'data/log.txt')
 parser.add_argument('--seed', default = 1, type = int)
 parser.add_argument('--threads', default = 16, type = int)
-parser.add_argument('--epochs', default = 800, type = int)
+parser.add_argument('--epochs', default = 100, type = int)
 parser.add_argument('--batch_size', default = 128, type = int)
 opts = parser.parse_args()
 
