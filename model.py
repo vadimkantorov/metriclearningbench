@@ -24,7 +24,7 @@ class Model(nn.Module):
 	criterion = None
 	optim_algo = torch.optim.SGD
 	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
-	optim_params_annealed = dict(epoch = float('inf'), gamma = 0.1)
+	lr_scheduler = dict(step_size = float('inf'), gamma = 0.1)
 
 class Untrained(Model):
 	def forward(self, input):
@@ -46,7 +46,7 @@ class Triplet(Model):
 		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	optim_params_annealed = dict(epoch = 30, gamma = 0.5)
+	lr_scheduler = dict(step_size = 30, gamma = 0.5)
 
 class TripletRatio(Model):
 	def criterion(self, embeddings, labels, margin = 0.1, eps = 1e-4):
@@ -93,7 +93,7 @@ class Pddm(Model):
 		return E_m + Lambda * E_e
 	
 	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	optim_params_annealed = dict(epoch = 10, gamma = 0.1)
+	lr_scheduler = dict(step_size = 10, gamma = 0.1)
 
 class Margin(Model):
 	def forward(self, input):
@@ -110,4 +110,4 @@ class Margin(Model):
 	optim_algo = torch.optim.Adam
 	optim_params = dict(lr = 1e-3, weight_decay = 1e-4, base_model_lr_mult = 1e-2)
 	#optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4, base_model_lr_mult = 1)
-	#optim_params_annealed = dict(epoch = 10, gamma = 0.5)
+	#lr_scheduler = dict(step_size = 10, gamma = 0.5)

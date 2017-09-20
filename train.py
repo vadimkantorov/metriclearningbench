@@ -12,7 +12,8 @@ import torch.optim.lr_scheduler
 import cub2011
 import cars196
 import stanford_online_products
-import googlenet
+import inception_v1_googlenet
+import resnet18
 import model
 import sampler
 
@@ -21,16 +22,15 @@ assert os.getenv('CUDA_VISIBLE_DEVICES')
 parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--dataset', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
-parser.add_argument('--base_model', choices = dict(GOOGLENET = googlenet.GoogLeNet), default = googlenet.GoogLeNet, action = LookupChoices)
-parser.add_argument('--model', choices = dict(LIFTED_STRUCT = model.LiftedStruct, TRIPLET = model.Triplet, TRIPLET_RATIO = model.TripletRatio, PDDM = model.Pddm, UNTRAINED = model.Untrained, MARGIN = model.Margin), default = model.Margin, action = LookupChoices)
-parser.add_argument('--sampler', choices = dict(SIMPLE = sampler.simple, TRIPLET = sampler.triplet, NPAIRS = sampler.npairs), default = sampler.npairs, action = LookupChoices)
-parser.add_argument('--data_dir', default = 'data')
-parser.add_argument('--base_model_weights', default = 'data/googlenet.h5')
+parser.add_argument('--base', choices = dict(inception_v1_googlenet = inception_v1_googlenet.inception_v1_googlenet, resnet18 = resnet18.resnet18), default = inception_v1_googlenet.inception_v1_googlenet, action = LookupChoices)
+parser.add_argument('--model', choices = dict(liftedstruct = model.LiftedStruct, triplet = model.Triplet, tripletratio = model.TripletRatio, pddm = model.Pddm, untrained = model.Untrained, margin = model.Margin), default = model.Margin, action = LookupChoices)
+parser.add_argument('--sampler', choices = dict(simple = sampler.simple, triplet = sampler.triplet, npairs = sampler.npairs), default = sampler.npairs, action = LookupChoices)
+parser.add_argument('--data', default = 'data')
 parser.add_argument('--log', default = 'data/log.txt')
 parser.add_argument('--seed', default = 1, type = int)
 parser.add_argument('--threads', default = 16, type = int)
 parser.add_argument('--epochs', default = 100, type = int)
-parser.add_argument('--batch_size', default = 128, type = int)
+parser.add_argument('--batch', default = 128, type = int)
 opts = parser.parse_args()
 
 for set_random_seed in [random.seed, torch.manual_seed, torch.cuda.manual_seed_all]:
@@ -43,37 +43,39 @@ def recall(embeddings, labels, K = 1):
 	knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
 	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
 
-base_model = opts.base_model()
-base_model.load_state_dict({k : torch.from_numpy(v) for k, v in hickle.load(opts.base_model_weights).items()})
+base_model = opts.base()
+base_model_weights_path = os.path.join(opts.data, opts.base.__name__ + '.h5')
+if os.path.exists(base_model_weights_path):
+	base_model.load_state_dict({k : torch.from_numpy(v) for k, v in hickle.load(base_model_weights_path).items()})
 
 normalize = transforms.Compose([
 	transforms.ToTensor(),
-	transforms.Lambda(lambda x: x * 255.0),
+	transforms.Lambda(lambda x: x * base_model.rescale),
 	transforms.Normalize(mean = base_model.rgb_mean, std = base_model.rgb_std),
-	transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])])
+	transforms.Lambda(lambda x: x[[2, 1, 0], ...])
 ])
 
-dataset_train = opts.dataset(opts.data_dir, train = True, transform = transforms.Compose([
+dataset_train = opts.dataset(opts.data, train = True, transform = transforms.Compose([
 	transforms.RandomSizedCrop(base_model.input_side),
 	transforms.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
-dataset_eval = opts.dataset(opts.data_dir, train = False, transform = transforms.Compose([
+dataset_eval = opts.dataset(opts.data, train = False, transform = transforms.Compose([
 	transforms.Scale(256),
 	transforms.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
 
-adapt_sampler = lambda batch_size, dataset, sampler, **kwargs: type('', (), dict(__len__ = dataset.__len__, __iter__ = lambda _: itertools.chain.from_iterable(sampler(batch_size, dataset, **kwargs))))()
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.batch_size, dataset_train, opts.sampler), num_workers = opts.threads, batch_size = opts.batch_size, drop_last = True)
-loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch_size)
+adapt_sampler = lambda batch, dataset, sampler, **kwargs: type('', (), dict(__len__ = dataset.__len__, __iter__ = lambda _: itertools.chain.from_iterable(sampler(batch, dataset, **kwargs))))()
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.batch, dataset_train, opts.sampler), num_workers = opts.threads, batch_size = opts.batch, drop_last = True)
+loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch)
 
 model = opts.model(base_model, dataset_train.num_training_classes).cuda()
-model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias and ('base_model' in k) == is_base_model] for is_base_model in [False, True] for is_bias in [False, True]]
+model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias and ('base' in k) == is_base] for is_base in [False, True] for is_bias in [False, True]]
 
 base_model_lr_mult = model.optim_params.pop('base_model_lr_mult', 1.0)
 optimizer = model.optim_algo([dict(params = base_model_weights, lr = base_model_lr_mult * model.optim_params['lr']), dict(params = base_model_biases, lr = base_model_lr_mult * model.optim_params['lr'], weight_decay = 0.0), dict(params = model_biases, weight_decay = 0.0)], **model.optim_params)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = model.optim_params_annealed['epoch'], gamma = model.optim_params_annealed['gamma'])
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **model.lr_scheduler)
 
 log = open(opts.log, 'w', 0)
 for epoch in range(opts.epochs):
