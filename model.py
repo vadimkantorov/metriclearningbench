@@ -95,6 +95,10 @@ class Pddm(Model):
 	lr_scheduler = dict(step_size = 10, gamma = 0.1)
 
 class Margin(Model):
+	def __init__(self):
+		Model.__init__(self)
+		self.beta_bias = nn.Parameter([1.2])
+
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
@@ -102,7 +106,7 @@ class Margin(Model):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
 		neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, K = int(pos.sum().data[0] / len(pos)), largest = False)
-		L = F.relu(alpha + (pos * 2 - 1) * (d - beta))
+		L = F.relu(alpha + (pos * 2 - 1) * (d - self.beta_bias))
 		M = ((pos + neg > 0) * (L > 0)).float()
 		return (M * L).sum() / M.sum()
 
