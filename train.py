@@ -14,6 +14,7 @@ import cars196
 import stanford_online_products
 import inception_v1_googlenet
 import resnet18
+import resnet50
 import model
 import sampler
 
@@ -22,14 +23,14 @@ assert os.getenv('CUDA_VISIBLE_DEVICES')
 parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--dataset', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
-parser.add_argument('--base', choices = dict(inception_v1_googlenet = inception_v1_googlenet.inception_v1_googlenet, resnet18 = resnet18.resnet18), default = inception_v1_googlenet.inception_v1_googlenet, action = LookupChoices)
+parser.add_argument('--base', choices = dict(inception_v1_googlenet = inception_v1_googlenet.inception_v1_googlenet, resnet18 = resnet18.resnet18, resnet50 = resnet50.resnet50), default = inception_v1_googlenet.inception_v1_googlenet, action = LookupChoices)
 parser.add_argument('--model', choices = dict(liftedstruct = model.LiftedStruct, triplet = model.Triplet, tripletratio = model.TripletRatio, pddm = model.Pddm, untrained = model.Untrained, margin = model.Margin), default = model.Margin, action = LookupChoices)
 parser.add_argument('--sampler', choices = dict(simple = sampler.simple, triplet = sampler.triplet, npairs = sampler.npairs), default = sampler.npairs, action = LookupChoices)
 parser.add_argument('--data', default = 'data')
 parser.add_argument('--log', default = 'data/log.txt')
 parser.add_argument('--seed', default = 1, type = int)
 parser.add_argument('--threads', default = 16, type = int)
-parser.add_argument('--epochs', default = 100, type = int)
+parser.add_argument('--epochs', default = 200, type = int)
 parser.add_argument('--batch', default = 128, type = int)
 opts = parser.parse_args()
 

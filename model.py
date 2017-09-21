@@ -19,7 +19,7 @@ class Model(nn.Module):
 		self.embedder = nn.Linear(base_model.output_size, embedding_size)
 
 	def forward(self, input):
-		return self.embedder(self.base_model(input).view(len(input), -1))
+		return self.embedder(F.relu(self.base_model(input).view(len(input), -1)))
 	
 	criterion = None
 	optim_algo = torch.optim.SGD
@@ -68,8 +68,7 @@ class Pddm(Model):
 		self.ws = nn.Linear(d, 1)
 	
 	def forward(self, input):
-		#return F.normalize(self.base_model(input).view(len(input), -1))
-		return F.normalize(self.embedder(self.base_model(input).view(len(input), -1)))
+		return F.normalize(Model.forward(self, input))
 
 	def criterion(self, embeddings, labels, Alpha = 0.5, Beta = 1.0, Lambda = 0.5):
 		#embeddings = embeddings * topk_mask(embeddings, dim = 1, K = 512)
