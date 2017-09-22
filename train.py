@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import random
 import argparse
 import itertools
@@ -23,7 +24,7 @@ assert os.getenv('CUDA_VISIBLE_DEVICES')
 parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
 parser.add_argument('--dataset', choices = dict(CUB2011 = cub2011.CUB2011MetricLearning, CARS196 = cars196.Cars196, STANFORD_ONLINE_PRODUCTS = stanford_online_products.StanfordOnlineProducts), default = cub2011.CUB2011MetricLearning, action = LookupChoices)
-parser.add_argument('--base', choices = dict(inception_v1_googlenet = inception_v1_googlenet.inception_v1_googlenet, resnet18 = resnet18.resnet18, resnet50 = resnet50.resnet50), default = inception_v1_googlenet.inception_v1_googlenet, action = LookupChoices)
+parser.add_argument('--base', choices = dict(inception_v1_googlenet = inception_v1_googlenet.inception_v1_googlenet, resnet18 = resnet18.resnet18, resnet50 = resnet50.resnet50), default = resnet50.resnet50, action = LookupChoices)
 parser.add_argument('--model', choices = dict(liftedstruct = model.LiftedStruct, triplet = model.Triplet, tripletratio = model.TripletRatio, pddm = model.Pddm, untrained = model.Untrained, margin = model.Margin), default = model.Margin, action = LookupChoices)
 parser.add_argument('--sampler', choices = dict(simple = sampler.simple, triplet = sampler.triplet, npairs = sampler.npairs), default = sampler.npairs, action = LookupChoices)
 parser.add_argument('--data', default = 'data')
@@ -84,6 +85,7 @@ for epoch in range(opts.epochs):
 	model.train()
 	loss_all, norm_all = [], []
 	for batch_idx, batch in enumerate(loader_train if model.criterion is not None else []):
+		tic = time.time()
 		images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
 		loss_all.append(loss.data[0])
@@ -91,16 +93,17 @@ for epoch in range(opts.epochs):
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
-		print('train {:>3}.{:05}  loss  {:.06f}'.format(epoch, batch_idx, loss_all[-1]))
-	log.write('loss epoch {}: {}\n'.format(epoch, torch.Tensor(loss_all or [0.0]).mean()))
+		print('train {:>3}.{:05}  loss  {:.04f}   hz {:.02f}'.format(epoch, batch_idx, loss_all[-1], len(images) / (time.time() - tic)))
+	log.write('loss epoch {}: {:.04f}\n'.format(epoch, torch.Tensor(loss_all or [0.0]).mean()))
 	
 	if epoch < 10 or epoch % 5 == 0:
 		model.eval()
 		embeddings_all, labels_all = [], []
 		for batch_idx, batch in enumerate(loader_eval):
+			tic = time.time()
 			images, labels = [torch.autograd.Variable(tensor.cuda(), volatile = True) for tensor in batch]
 			output = model(images)
 			embeddings_all.append(output.data.cpu())
 			labels_all.append(labels.data.cpu())
-			print('eval  {:>3}.{:05}'.format(epoch, batch_idx))
-		log.write('recall@1 epoch {}: {}\n'.format(epoch, recall(torch.cat(embeddings_all), torch.cat(labels_all))))
+			print('eval  {:>3}.{:05}  hz {:.02f}'.format(epoch, batch_idx, len(images) / (time.time() - tic)))
+		log.write('recall@1 epoch {}: {:.06f}\n'.format(epoch, recall(torch.cat(embeddings_all), torch.cat(labels_all))))
