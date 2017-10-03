@@ -21,4 +21,4 @@ python train.py --dataset CUB2011 --model liftedstruct --base inception_v1_googl
 # Results @ epoch100
 | | CUB2011
 |:---:|:---:|
-| Margin contrastive | 0.58 |
+| Margin contrastive | [0.58](./data/log.txt.margin) |
