@@ -17,3 +17,8 @@ python train.py --dataset CUB2011 --model margin --base resnet50
 wget -P ./data https://github.com/vadimkantorov/metriclearningbench/releases/download/data/googlenet.h5
 python train.py --dataset CUB2011 --model liftedstruct --base inception_v1_googlenet
 ```
+
+# Results @ epoch100
+| | CUB2011
+|:---:|:---:|
+| Margin contrastive | 0.58 |

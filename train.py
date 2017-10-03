@@ -76,7 +76,7 @@ model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, 
 
 base_model_lr_mult = model.optimizer_params.pop('base_model_lr_mult', 1.0)
 optimizer = model.optimizer([dict(params = base_model_weights, lr = base_model_lr_mult * model.optimizer_params['lr']), dict(params = base_model_biases, lr = base_model_lr_mult * model.optimizer_params['lr'], weight_decay = 0.0), dict(params = model_biases, weight_decay = 0.0)], **model.optimizer_params)
-scheduler = torch.optim.lr_scheduler_params.StepLR(optimizer, **model.lr_scheduler_params)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **model.lr_scheduler_params)
 
 log = open(opts.log, 'w', 0)
 for epoch in range(opts.epochs):
