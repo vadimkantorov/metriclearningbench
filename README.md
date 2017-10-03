@@ -10,9 +10,10 @@
 
 # Examples
 ```shell
-# download GoogLeNet weights
-wget -P ./data https://github.com/vadimkantorov/metriclearningbench/releases/download/data/googlenet.h5
+# train margin contrastive loss on CUB2011 using ResNet-50
+python train.py --dataset CUB2011 --model margin --base resnet50
 
-# train margin contrastive loss on CUB2011
-python train.py --model MARGIN --dataset CUB2011 --base_model GOOGLENET
+# download GoogLeNet weights and train using LiftedStruct loss
+wget -P ./data https://github.com/vadimkantorov/metriclearningbench/releases/download/data/googlenet.h5
+python train.py --dataset CUB2011 --model liftedstruct --base inception_v1_googlenet
 ```

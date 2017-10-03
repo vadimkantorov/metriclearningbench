@@ -23,9 +23,9 @@ class Model(nn.Module):
 		return self.embedder(F.relu(self.base_model(input).view(len(input), -1)))
 	
 	criterion = None
-	optim_algo = torch.optim.SGD
-	optim_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
-	lr_scheduler = dict(step_size = float('inf'), gamma = 0.1)
+	optimizer = torch.optim.SGD
+	optimizer_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
+	lr_scheduler_params = dict(step_size = float('inf'), gamma = 0.1)
 
 class Untrained(Model):
 	def forward(self, input):
@@ -46,8 +46,8 @@ class Triplet(Model):
 		M = pos.unsqueeze(1).expand_as(T) * (1 - pos.unsqueeze(2).expand_as(T))
 		return (M * F.relu(T - T.transpose(1, 2) + margin)).sum() / M.sum()
 	
-	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	lr_scheduler = dict(step_size = 30, gamma = 0.5)
+	optimizer_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
+	lr_scheduler_params = dict(step_size = 30, gamma = 0.5)
 
 class TripletRatio(Model):
 	def criterion(self, embeddings, labels, margin = 0.1, eps = 1e-4):
@@ -92,22 +92,25 @@ class Pddm(Model):
 
 		return E_m + Lambda * E_e
 	
-	optim_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
-	lr_scheduler = dict(step_size = 10, gamma = 0.1)
+	optimizer_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 5e-4)
+	lr_scheduler_params = dict(step_size = 10, gamma = 0.1)
 
 class Margin(Model):
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6):
+	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6, eps = 1e-6, distance_reweighted_sampling = False):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
-		neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, K = int(pos.sum().data[0] / len(pos)), largest = False)
+		if distance_reweighted_sampling:
+			neg = torch.autograd.Variable(torch.zeros_like(pos.data).scatter_(1, torch.multinomial((d.data.clamp(min = distance_threshold).pow(embeddings.size(-1) - 2) * (1 - d.data.clamp(min = distance_threshold).pow(2) / 4).pow(0.5 * (embeddings.size(-1) - 3))).reciprocal().masked_fill_(pos.data > 0, eps), replacement = False, num_samples = int(pos.sum().data[0] / len(pos))), 1))
+		else:
+			neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, K = int(pos.sum().data[0] / len(pos)), largest = False)
 		L = F.relu(alpha + (pos * 2 - 1) * (d - beta))
 		M = ((pos + neg > 0) * (L > 0)).float()
 		return (M * L).sum() / M.sum()
 
-	optim_algo = torch.optim.Adam
-	optim_params = dict(lr = 1e-3, weight_decay = 1e-4, base_model_lr_mult = 1e-2)
-	#optim_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4, base_model_lr_mult = 1)
-	#lr_scheduler = dict(step_size = 10, gamma = 0.5)
+	optimizer = torch.optim.Adam
+	optimizer_params = dict(lr = 1e-3, weight_decay = 1e-4, base_model_lr_mult = 1e-2)
+	#optimizer_params = dict(lr = 1e-3, momentum = 0.9, weight_decay = 5e-4, base_model_lr_mult = 1)
+	#lr_scheduler_params = dict(step_size = 10, gamma = 0.5)

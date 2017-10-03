@@ -8,7 +8,6 @@ import hickle
 import torch
 import torch.utils.data
 import torchvision.transforms as transforms
-import torch.optim.lr_scheduler
 
 import cub2011
 import cars196
@@ -31,7 +30,7 @@ parser.add_argument('--data', default = 'data')
 parser.add_argument('--log', default = 'data/log.txt')
 parser.add_argument('--seed', default = 1, type = int)
 parser.add_argument('--threads', default = 16, type = int)
-parser.add_argument('--epochs', default = 200, type = int)
+parser.add_argument('--epochs', default = 100, type = int)
 parser.add_argument('--batch', default = 128, type = int)
 opts = parser.parse_args()
 
@@ -75,9 +74,9 @@ loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_wor
 model = opts.model(base_model, dataset_train.num_training_classes).cuda()
 model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias and ('base' in k) == is_base] for is_base in [False, True] for is_bias in [False, True]]
 
-base_model_lr_mult = model.optim_params.pop('base_model_lr_mult', 1.0)
-optimizer = model.optim_algo([dict(params = base_model_weights, lr = base_model_lr_mult * model.optim_params['lr']), dict(params = base_model_biases, lr = base_model_lr_mult * model.optim_params['lr'], weight_decay = 0.0), dict(params = model_biases, weight_decay = 0.0)], **model.optim_params)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **model.lr_scheduler)
+base_model_lr_mult = model.optimizer_params.pop('base_model_lr_mult', 1.0)
+optimizer = model.optimizer([dict(params = base_model_weights, lr = base_model_lr_mult * model.optimizer_params['lr']), dict(params = base_model_biases, lr = base_model_lr_mult * model.optimizer_params['lr'], weight_decay = 0.0), dict(params = model_biases, weight_decay = 0.0)], **model.optimizer_params)
+scheduler = torch.optim.lr_scheduler_params.StepLR(optimizer, **model.lr_scheduler_params)
 
 log = open(opts.log, 'w', 0)
 for epoch in range(opts.epochs):
@@ -89,14 +88,13 @@ for epoch in range(opts.epochs):
 		images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
 		loss = model.criterion(model(images), labels)
 		loss_all.append(loss.data[0])
-		
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
 		print('train {:>3}.{:05}  loss  {:.04f}   hz {:.02f}'.format(epoch, batch_idx, loss_all[-1], len(images) / (time.time() - tic)))
 	log.write('loss epoch {}: {:.04f}\n'.format(epoch, torch.Tensor(loss_all or [0.0]).mean()))
 	
-	if epoch < 10 or epoch % 5 == 0:
+	if epoch < 10 or epoch % 5 == 0 or epoch == opts.epochs - 1:
 		model.eval()
 		embeddings_all, labels_all = [], []
 		for batch_idx, batch in enumerate(loader_eval):
