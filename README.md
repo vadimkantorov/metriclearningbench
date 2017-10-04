@@ -14,6 +14,6 @@ python train.py --dataset CUB2011 --model liftedstruct --base inception_v1_googl
 ```
 
 # Results (recall@1 at epoch100)
-| | [CUB2011](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) | [CARS196](http://ai.stanford.edu/~jkrause/cars/car_dataset.html) | [Stanford Online Products](http://cvgl.stanford.edu/projects/lifted_struct/)
+| |[CUB2011](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) | [CARS196](http://ai.stanford.edu/~jkrause/cars/car_dataset.html) | [Stanford Online Products](http://cvgl.stanford.edu/projects/lifted_struct/)
 |:---:|:---:|:---:|:---:|
-| Margin contrastive | [0.58](./data/log.txt.margin) |
+| Margin contrastive | [0.58](./data/log.txt.margin) @ epoch60 | | |
