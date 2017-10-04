@@ -99,7 +99,7 @@ class Margin(Model):
 	def forward(self, input):
 		return F.normalize(Model.forward(self, input))
 
-	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6, eps = 1e-6, distance_weighted_sampling = True):
+	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6, eps = 1e-6, distance_weighted_sampling = False):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.autograd.Variable(torch.eye(len(d))).type_as(d)
 		num_neg = int(pos.data.sum() / len(pos))
