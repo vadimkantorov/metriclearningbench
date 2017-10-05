@@ -21,6 +21,7 @@ class StanfordOnlineProducts(ImageFolder, CIFAR10):
 		['table_final/111194782300_0.JPG', '8203e079b5c134161bbfa7ee2a43a0a1'],
 		['toaster_final/111157129195_0.JPG', 'd6c24ee8c05d986cafffa6af82ae224e']
 	]
+	num_training_classes = 11318
 
 	def __init__(self, root, train=False, transform=None, target_transform=None, download=False, **kwargs):
 		self.root = root
