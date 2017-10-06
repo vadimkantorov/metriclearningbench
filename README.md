@@ -8,10 +8,10 @@
 |:---:|:---:|:---:|:---:|
 | Margin contrastive, semi-hard | [0.58](./data/log.txt.margin_cub2011) @ epoch60 | | [0.7526](./data/log.txt.margin_stanfordonlineproducts) @ epoch90 | 
 
-Results are saved in `./data/log.txt`.
-
 # Examples
 ```shell
+# evaluation results are saved in ./data/log.txt
+
 # train margin contrastive loss on CUB2011 using ResNet-50
 python train.py --dataset cub2011 --model margin --base resnet50
 
