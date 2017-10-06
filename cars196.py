@@ -7,7 +7,8 @@ from torchvision.datasets import ImageFolder
 from torchvision.datasets import CIFAR10
 from torchvision.datasets.folder import default_loader
 
-class Cars196(ImageFolder, CIFAR10):
+
+class Cars196MetricLearning(ImageFolder, CIFAR10):
 	base_folder = 'car_ims'
 	url = 'http://imagenet.stanford.edu/internal/car196/car_ims.tgz'
 	filename = 'cars_ims.tgz'
@@ -26,6 +27,7 @@ class Cars196(ImageFolder, CIFAR10):
 		['014981.jpg', 'e7238ce05218a6e4dc92cda5e8971f17'],
 		['014982.jpg', 'b2a95af89329d32d5fe2b74f0922378e']
 	]
+	num_training_classes = 98
 	
 	def __init__(self, root, train=False, transform=None, target_transform=None, download=False, **kwargs):
 		self.root = root
@@ -44,4 +46,4 @@ class Cars196(ImageFolder, CIFAR10):
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
 
-		self.imgs = [(os.path.join(root, self.base_folder, '0' + a[-1][0]), int(a[-2][0]) - 1) for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, 'cars_{}_annos.mat'.format('train' if train else 'test')))['annotations'][0]]
+		self.imgs = [(os.path.join(root, self.base_folder, '0' + a[-1][0]), int(a[-2][0]) - 1) for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, 'cars_train_annos.mat'))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train]
