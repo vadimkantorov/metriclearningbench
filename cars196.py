@@ -6,6 +6,7 @@ import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets import CIFAR10
 from torchvision.datasets.folder import default_loader
+from torchvision.datasets.utils import download_url
 
 
 class Cars196MetricLearning(ImageFolder, CIFAR10):
@@ -18,6 +19,10 @@ class Cars196MetricLearning(ImageFolder, CIFAR10):
 	url_devkit = 'http://ai.stanford.edu/~jkrause/cars/car_devkit.tgz'
 	filename_devkit = 'cars_devkit.tgz'
 	tgz_md5_devkit = 'c3b158d763b6e2245038c8ad08e45376'
+
+	url_testanno = 'http://imagenet.stanford.edu/internal/car196/cars_test_annos_withlabels.mat'
+	filename_testanno = 'cars_test_annos_withlabels.mat'
+	mat_md5_testanno = 'b0a2b23655a3edd16d84508592a98d10'
 
 	train_list = [
 		['000001.jpg', '2d44a28f071aeaac9c0802fddcde452e'],
@@ -36,14 +41,15 @@ class Cars196MetricLearning(ImageFolder, CIFAR10):
 		self.loader = default_loader
 
 		if download:
-			base_folder, url, filename, tgz_md5 = self.base_folder, self.url, self.filename, self.tgz_md5
-			self.base_folder, self.url, self.filename, self.tgz_md5 = self.base_folder_devkit, self.url_devkit, self.filename_devkit, self.tgz_md5_devkit
+			url, filename, tgz_md5 = self.url, self.filename, self.tgz_md5
+			self.url, self.filename, self.tgz_md5 = self.url_devkit, self.filename_devkit, self.tgz_md5_devkit
 			self.download()
-			self.base_folder, self.url, self.filename, self.tgz_md5	= base_folder, url, filename, tgz_md5
+			self.url, self.filename, self.tgz_md5 = url, filename, tgz_md5
 			self.download()
+			download_url(self.url_testanno, os.path.join(root, self.base_folder_devkit), self.filename_testanno, self.mat_md5_testanno)
 
 		if not self._check_integrity():
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
 
-		self.imgs = [(os.path.join(root, self.base_folder, '0' + a[-1][0]), int(a[-2][0]) - 1) for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, 'cars_train_annos.mat'))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train]
+		self.imgs = [(os.path.join(root, self.base_folder, '0' + a[-1][0]), int(a[-2][0]) - 1) for filename in ['cars_train_annos.mat', 'cars_test_annos_withlabels.mat'] for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, filename))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train]

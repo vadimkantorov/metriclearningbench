@@ -42,7 +42,7 @@ def recall(embeddings, labels, K = 1):
 	norm = prod.diag().unsqueeze(1).expand_as(prod)
 	D = norm + norm.t() - 2 * prod
 	knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
-	return torch.Tensor([labels[knn_inds[i]].eq(labels[i]).max() for i in range(len(embeddings))]).mean()
+	return (labels.unsqueeze(-1).expand_as(knn_inds) == labels[knn_inds.contiguous().view(-1)].view_as(knn_inds)).max(1)[0].float().mean()
 
 base_model = opts.base()
 base_model_weights_path = os.path.join(opts.data, opts.base.__name__ + '.h5')
