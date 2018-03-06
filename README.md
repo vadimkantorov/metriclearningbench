@@ -1,12 +1,9 @@
-# Metric learning [models](./model.py) in PyTorch
-1. [Lifted structured embedding](https://arxiv.org/abs/1511.06452)
-2. [Triplet loss](https://arxiv.org/abs/1503.03832)
-3. [Margin contrastive loss](https://arxiv.org/abs/1706.07567)
-
-# Results (recall@1)
+# Metric learning [models](./model.py) in PyTorch, recall@1
 | |[CUB2011](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) | [CARS196](http://ai.stanford.edu/~jkrause/cars/car_dataset.html) | [Stanford Online Products](http://cvgl.stanford.edu/projects/lifted_struct/)
 |:---:|:---:|:---:|:---:|
-| Margin contrastive, semi-hard | [0.58](./data/log.txt.margin_cub2011) @ epoch60 | | [0.7526](./data/log.txt.margin_stanfordonlineproducts) @ epoch90 | 
+| [Margin contrastive loss](https://arxiv.org/abs/1706.07567), semi-hard | [0.58](./data/log.txt.margin_cub2011) @ epoch60 | | [0.7526](./data/log.txt.margin_stanfordonlineproducts) @ epoch90 | 
+| [Triplet loss](https://arxiv.org/abs/1503.03832)| 
+| [Lifted structured embedding](https://arxiv.org/abs/1511.06452) |
 
 # Examples
 ```shell
