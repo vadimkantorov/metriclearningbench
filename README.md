@@ -1,4 +1,4 @@
-# [WIP] Metric learning [models](./model.py) in PyTorch
+# Metric learning [models](./model.py) in PyTorch
 1. [Lifted structured embedding](https://arxiv.org/abs/1511.06452)
 2. [Triplet loss](https://arxiv.org/abs/1503.03832)
 3. [Margin contrastive loss](https://arxiv.org/abs/1706.07567)
