@@ -68,8 +68,8 @@ dataset_eval = opts.dataset(opts.data, train = False, transform = transforms.Com
 ]), download = True)
 
 adapt_sampler = lambda batch, dataset, sampler, **kwargs: type('', (), dict(__len__ = dataset.__len__, __iter__ = lambda _: itertools.chain.from_iterable(sampler(batch, dataset, **kwargs))))()
-loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.batch, dataset_train, opts.sampler), num_workers = opts.threads, batch_size = opts.batch, drop_last = True)
-loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch)
+loader_train = torch.utils.data.DataLoader(dataset_train, sampler = adapt_sampler(opts.batch, dataset_train, opts.sampler), num_workers = opts.threads, batch_size = opts.batch, drop_last = True, pin_memory = True)
+loader_eval = torch.utils.data.DataLoader(dataset_eval, shuffle = False, num_workers = opts.threads, batch_size = opts.batch, pin_memory = True)
 
 model = opts.model(base_model, dataset_train.num_training_classes).cuda()
 model_weights, model_biases, base_model_weights, base_model_biases = [[p for k, p in model.named_parameters() if p.requires_grad and ('bias' in k) == is_bias and ('base' in k) == is_base] for is_base in [False, True] for is_bias in [False, True]]
@@ -99,8 +99,9 @@ for epoch in range(opts.epochs):
 		embeddings_all, labels_all = [], []
 		for batch_idx, batch in enumerate(loader_eval):
 			tic = time.time()
-			images, labels = [torch.autograd.Variable(tensor.cuda(), volatile = True) for tensor in batch]
-			output = model(images)
+			images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
+			with torch.no_grad():
+				output = model(images)
 			embeddings_all.append(output.data.cpu())
 			labels_all.append(labels.data.cpu())
 			print('eval  {:>3}.{:05}  hz {:.02f}'.format(epoch, batch_idx, len(images) / (time.time() - tic)))
