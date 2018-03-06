@@ -15,19 +15,21 @@ class Cars196MetricLearning(ImageFolder, CIFAR10):
 	filename_devkit = 'cars_devkit.tgz'
 	tgz_md5_devkit = 'c3b158d763b6e2245038c8ad08e45376'
 
-	base_folder_trainims = 'cars_ims_train'
+	base_folder_trainims = 'cars_train'
 	url_trainims = 'http://imagenet.stanford.edu/internal/car196/cars_train.tgz'
 	filename_trainims = 'cars_ims_train.tgz'
-	tgz_md5_trainims = ''
+	tgz_md5_trainims = '065e5b463ae28d29e77c1b4b166cfe61'
 	
-	base_folder_testims = 'cars_ims_test'
+	base_folder_testims = 'cars_test'
 	url_testims = 'http://imagenet.stanford.edu/internal/car196/cars_test.tgz'
 	filename_testims = 'cars_ims_test.tgz'
-	tgz_md5_testims = ''
+	tgz_md5_testims = '4ce7ebf6a94d07f1952d94dd34c4d501'
 	
 	url_testanno = 'http://imagenet.stanford.edu/internal/car196/cars_test_annos_withlabels.mat'
 	filename_testanno = 'cars_test_annos_withlabels.mat'
 	mat_md5_testanno = 'b0a2b23655a3edd16d84508592a98d10'
+	
+	filename_trainanno = 'cars_train_annos.mat'
 	
 	train_list = [
 		['000001.jpg', '2d44a28f071aeaac9c0802fddcde452e'],
