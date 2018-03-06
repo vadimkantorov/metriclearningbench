@@ -30,15 +30,13 @@ class Cars196MetricLearning(ImageFolder, CIFAR10):
 	mat_md5_testanno = 'b0a2b23655a3edd16d84508592a98d10'
 	
 	filename_trainanno = 'cars_train_annos.mat'
-	
+
+	base_folder = 'cars_train'	
 	train_list = [
-		['000001.jpg', '2d44a28f071aeaac9c0802fddcde452e'],
-		['000002.jpg', '531fbde520bee33dcbfced6ae588c8f9']
+		['00001.jpg', '8df595812fee3ca9a215e1ad4b0fb0c4'],
+		['00002.jpg', '4b9e5efcc3612378ec63a22f618b5028']
 	]
-	test_list = [
-		['014981.jpg', 'e7238ce05218a6e4dc92cda5e8971f17'],
-		['014982.jpg', 'b2a95af89329d32d5fe2b74f0922378e']
-	]
+	test_list = []
 	num_training_classes = 98
 	
 	def __init__(self, root, train=False, transform=None, target_transform=None, download=False, **kwargs):
@@ -63,4 +61,4 @@ class Cars196MetricLearning(ImageFolder, CIFAR10):
 			raise RuntimeError('Dataset not found or corrupted.' +
 							   ' You can use download=True to download it')
 
-		self.imgs = [(os.path.join(root, self.base_folder, self.base_folder_trainims, a[-1][0]), int(a[-2][0]) - 1) for filename in [self.filename_trainanno] for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, filename))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train] + [(os.path.join(root, self.base_folder_testims, a[-1][0]), int(a[-2][0]) - 1) for filename in [self.filename_testanno] for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, filename))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train]
+		self.imgs = [(os.path.join(root, self.base_folder_trainims, a[-1][0]), int(a[-2][0]) - 1) for filename in [self.filename_trainanno] for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, filename))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train] + [(os.path.join(root, self.base_folder_testims, a[-1][0]), int(a[-2][0]) - 1) for filename in [self.filename_testanno] for a in scipy.io.loadmat(os.path.join(root, self.base_folder_devkit, filename))['annotations'][0] if (int(a[-2][0]) - 1 < self.num_training_classes) == train]

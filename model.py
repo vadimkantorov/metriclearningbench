@@ -24,7 +24,7 @@ class Model(nn.Module):
 	
 	criterion = None
 	optimizer = torch.optim.SGD
-	optimizer_params = dict(lr = 1e-5, momentum = 0.9, weight_decay = 2e-4, dampening = 0.9)
+	optimizer_params = dict(lr = 1e-4, momentum = 0.9, weight_decay = 2e-4)
 	lr_scheduler_params = dict(step_size = float('inf'), gamma = 0.1)
 
 class Untrained(Model):
