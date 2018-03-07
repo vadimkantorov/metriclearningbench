@@ -3,7 +3,9 @@
 |:---:|:---:|:---:|:---:|
 | [Margin contrastive loss](https://arxiv.org/abs/1706.07567), semi-hard | [0.58](./data/log.txt.margin_cub2011) @ epoch60 |  [0.80](./data/log.txt.margin_cars196) @ epoch60 | [0.7526](./data/log.txt.margin_stanfordonlineproducts) @ epoch90 | 
 | [Lifted structured embedding](https://arxiv.org/abs/1511.06452) |
-| [Triplet loss](https://arxiv.org/abs/1503.03832)| 
+| [Triplet loss](https://arxiv.org/abs/1503.03832)|
+
+Original impl published at: https://github.com/apache/incubator-mxnet/blob/master/example/gluon/embedding_learning/model.py
 
 # Examples
 ```shell
