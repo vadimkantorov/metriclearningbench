@@ -57,12 +57,12 @@ normalize = transforms.Compose([
 ])
 
 dataset_train = opts.dataset(opts.data, train = True, transform = transforms.Compose([
-	transforms.RandomSizedCrop(base_model.input_side),
+	transforms.RandomCrop(base_model.input_side),
 	transforms.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
 dataset_eval = opts.dataset(opts.data, train = False, transform = transforms.Compose([
-	transforms.Scale(256),
+	transforms.Resize(256),
 	transforms.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
