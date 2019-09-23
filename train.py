@@ -85,7 +85,7 @@ for epoch in range(opts.epochs):
 	loss_all, norm_all = [], []
 	for batch_idx, batch in enumerate(loader_train if model.criterion is not None else []):
 		tic = time.time()
-		images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
+		images, labels = [tensor.cuda() for tensor in batch]
 		loss = model.criterion(model(images), labels)
 		loss_all.append(loss.data[0])
 		optimizer.zero_grad()
@@ -99,7 +99,7 @@ for epoch in range(opts.epochs):
 		embeddings_all, labels_all = [], []
 		for batch_idx, batch in enumerate(loader_eval):
 			tic = time.time()
-			images, labels = [torch.autograd.Variable(tensor.cuda()) for tensor in batch]
+			images, labels = [tensor.cuda() for tensor in batch]
 			with torch.no_grad():
 				output = model(images)
 			embeddings_all.append(output.data.cpu())
