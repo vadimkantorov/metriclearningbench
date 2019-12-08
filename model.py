@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 def topk_mask(input, dim, K = 10, **kwargs):
 	index = input.topk(max(1, min(K, input.size(dim))), dim = dim, **kwargs)[1]
-	return torch.zeros_like(input.data).scatter(dim, index, 1.0)
+	return torch.zeros_like(input).scatter(dim, index, 1.0)
 
 def pdist(A, squared = False, eps = 1e-4):
 	prod = torch.mm(A, A.t())
@@ -84,8 +84,8 @@ class Pddm(Model):
 		s = self.ws(F.relu(F.dropout(self.wc(torch.cat((u_, v_), -1)), training = self.training))).view_as(d)
 		
 		sneg = s * (1 - pos)
-		i, j = min([(s.data[i, j], (i, j)) for i, j in pos.data.nonzero()])[1]
-		k, l = sneg.data.max(1, keepdim = True)[1][[i, j], ...].squeeze(1)
+		i, j = min([(s[i, j], (i, j)) for i, j in pos.nonzero()])[1]
+		k, l = sneg.max(1, keepdim = True)[1][[i, j], ...].squeeze(1)
 
 		E_m = F.relu(Alpha - s[i, j] + s[i, k]) + F.relu(Alpha - s[i, j] + s[j, l])
 		E_e = F.relu(Beta + d[i, j] - d[i, k]) + F.relu(Beta + d[i, j] - d[j, l])
@@ -102,9 +102,9 @@ class Margin(Model):
 	def criterion(self, embeddings, labels, alpha = 0.2, beta = 1.2, distance_threshold = 0.5, inf = 1e6, eps = 1e-6, distance_weighted_sampling = False):
 		d = pdist(embeddings)
 		pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d) - torch.eye(len(d)).type_as(d)
-		num_neg = int(pos.data.sum() / len(pos))
+		num_neg = int(pos.sum() / len(pos))
 		if distance_weighted_sampling:
-			neg = torch.zeros_like(pos.data).scatter_(1, torch.multinomial((d.data.clamp(min = distance_threshold).pow(embeddings.size(-1) - 2) * (1 - d.data.clamp(min = distance_threshold).pow(2) / 4).pow(0.5 * (embeddings.size(-1) - 3))).reciprocal().masked_fill_(pos.data + torch.eye(len(d)).type_as(d.data) > 0, eps), replacement = False, num_samples = num_neg), 1)
+			neg = torch.zeros_like(pos).scatter_(1, torch.multinomial((d.clamp(min = distance_threshold).pow(embeddings.size(-1) - 2) * (1 - d.clamp(min = distance_threshold).pow(2) / 4).pow(0.5 * (embeddings.size(-1) - 3))).reciprocal().masked_fill_(pos + torch.eye(len(d)).type_as(d) > 0, eps), replacement = False, num_samples = num_neg), 1)
 		else:
 			neg = topk_mask(d  + inf * ((pos > 0) + (d < distance_threshold)).type_as(d), dim = 1, largest = False, K = num_neg)
 		L = F.relu(alpha + (pos * 2 - 1) * (d - beta))
