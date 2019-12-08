@@ -6,8 +6,7 @@ import argparse
 import itertools
 import hickle
 import torch
-import torch.utils.data
-import torchvision.transforms as transforms
+import torchvision.transforms as T
 
 import cub2011
 import cars196
@@ -17,8 +16,6 @@ import resnet18
 import resnet50
 import model
 import sampler
-
-assert os.getenv('CUDA_VISIBLE_DEVICES')
 
 parser = argparse.ArgumentParser()
 LookupChoices = type('', (argparse.Action, ), dict(__call__ = lambda a, p, n, v, o: setattr(n, a.dest, a.choices[v])))
@@ -42,28 +39,28 @@ def recall(embeddings, labels, K = 1):
 	norm = prod.diag().unsqueeze(1).expand_as(prod)
 	D = norm + norm.t() - 2 * prod
 	knn_inds = D.topk(1 + K, dim = 1, largest = False)[1][:, 1:]
-	return (labels.unsqueeze(-1).expand_as(knn_inds) == labels[knn_inds.contiguous().view(-1)].view_as(knn_inds)).max(1)[0].float().mean()
+	return (labels.unsqueeze(-1).expand_as(knn_inds) == labels[knn_inds.flatten()].view_as(knn_inds)).max(1)[0].float().mean()
 
 base_model = opts.base()
 base_model_weights_path = os.path.join(opts.data, opts.base.__name__ + '.h5')
 if os.path.exists(base_model_weights_path):
 	base_model.load_state_dict({k : torch.from_numpy(v) for k, v in hickle.load(base_model_weights_path).items()})
 
-normalize = transforms.Compose([
-	transforms.ToTensor(),
-	transforms.Lambda(lambda x: x * base_model.rescale),
-	transforms.Normalize(mean = base_model.rgb_mean, std = base_model.rgb_std),
-	transforms.Lambda(lambda x: x[[2, 1, 0], ...])
+normalize = T.Compose([
+	T.ToTensor(),
+	T.Lambda(lambda x: x * base_model.rescale),
+	T.Normalize(mean = base_model.rgb_mean, std = base_model.rgb_std),
+	T.Lambda(lambda x: x[[2, 1, 0], ...])
 ])
 
 dataset_train = opts.dataset(opts.data, train = True, transform = transforms.Compose([
-	transforms.RandomSizedCrop(base_model.input_side),
-	transforms.RandomHorizontalFlip(),
+	T.RandomSizedCrop(base_model.input_side),
+	T.RandomHorizontalFlip(),
 	normalize
 ]), download = True)
 dataset_eval = opts.dataset(opts.data, train = False, transform = transforms.Compose([
-	transforms.Scale(256),
-	transforms.CenterCrop(base_model.input_side),
+	T.Scale(256),
+	T.CenterCrop(base_model.input_side),
 	normalize
 ]), download = True)
 
@@ -87,7 +84,7 @@ for epoch in range(opts.epochs):
 		tic = time.time()
 		images, labels = [tensor.cuda() for tensor in batch]
 		loss = model.criterion(model(images), labels)
-		loss_all.append(loss.data[0])
+		loss_all.append(float(loss))
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
