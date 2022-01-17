@@ -5,7 +5,7 @@
 | [Lifted structured embedding](https://arxiv.org/abs/1511.06452) |
 | [Triplet loss](https://arxiv.org/abs/1503.03832)|
 
-Original impl published at: https://github.com/apache/incubator-mxnet/blob/master/example/gluon/embedding_learning/model.py
+Original impl of [Margin contrastive loss](https://arxiv.org/abs/1706.07567) published at: https://github.com/apache/incubator-mxnet/tree/19ede063c4756fa49cfe741e654180aee33991c6/example/gluon/embedding_learning (temporarily removed in https://github.com/apache/incubator-mxnet/pull/20602)
 
 # Examples
 ```shell
